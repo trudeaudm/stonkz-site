@@ -306,7 +306,7 @@ footer a:hover{color:#fff}
         <div class="inset">
           <div class="eyebrow" style="margin-bottom:5px">the short version</div>
           <ul class="bul">
-            <li><b>per-capita fills</b>every active wallet gets a fair share of every block's tranche. bid size still counts for something — but it's logarithmically damped, so a $10,000 bid takes a slice only slightly bigger than a $10 one, not a thousand times bigger.</li>
+            <li><b>per-capita fills</b>every active wallet gets a fair share of every block's tranche. bid size still counts for something — but it's damped hard: under pro-rata a $10,000 bid would take <b style="display:inline">1,000×</b> the fill of a $10 bid. here it takes <b style="display:inline">2.6×</b>.</li>
             <li><b>the crowd sets the price</b>the price only climbs when the previous block sold out. no demand, no climb.</li>
             <li><b>the pool is the point</b>the auction's job is to open a market with depth, not to end at a big number.</li>
           </ul>
@@ -352,18 +352,24 @@ decide whether we're worth watching.
         <div class="inset">
           <ul class="bul">
             <li><b>per-capita fills — the whole point</b>
-              each block's tranche is split across every wallet with a live bid at or above the current rung — per wallet, not per dollar. a size bonus tilts the split toward larger bids, but it enters through a logarithm and is bounded by the creator's filed bonus parameter, so scaling your bid by 1,000× moves your share by single-digit percent. bid size mostly decides <i>whether</i> you're filled, barely <i>how much</i>. multiple bids from one wallet show separately in the book and share one fill share.
-              <details><summary>show the formula ▸</summary><div class="formula">fill_i = (tranche_block / active_wallets)
-         × (1 + α · log₂(1 + bonus_i))
+              each block's tranche is split across every wallet with a live bid at or above the current rung — per wallet, not per dollar. a size bonus tilts the split toward larger bids, but it buys a fixed percentage per <i>doubling</i> of capital rather than scaling with it — so the tilt grows with the logarithm of your bid, not your bid. at the 10% setting our own genesis filing uses, 1,000× the capital buys 2.6× the fill. set the bonus to 0 and the split is exactly equal. multiple bids from one wallet show separately in the book and share one fill share.
+              <details><summary>show the formula ▸</summary><div class="formula">fill_i ∝ (tranche_block / active_wallets)
+         × capital_i ^ log₂(1 + β)
 
 active_wallets = wallets with ≥1 live bid whose
                  maxPrice ≥ current rung price
 
-α is the creator's filed size-bonus parameter.
-the log₂ is what mutes it: the tilt grows with
-the logarithm of bid size, never with bid size.
-per-wallet supply cap still binds on top.
-α = 0 gives a strictly equal split.</div></details>
+β is the creator's filed size bonus: the extra
+fill bought by each DOUBLING of capital.
+β = 10% (our genesis filing) → exponent 0.1375
+
+    2× capital  →  1.10× fill
+   10× capital  →  1.37× fill
+  100× capital  →  1.88× fill
+ 1000× capital  →  2.59× fill
+
+β = 0 gives a strictly equal split.
+per-wallet supply cap binds on top of all of it.</div></details>
             </li>
             <li><b>the demand gate — price climbs on proof</b>
               the rung only advances if the prior tranche fully cleared. partial clear means the price is re-offered flat. a ladder that stops climbing is telling you something true.
