@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STONKZ — the fair-launch ladder auction</title>
+<meta name="description" content="STONKZ is a token launchpad on Robinhood Chain built around the ladder auction: the crowd prices the launch block by block, and every active wallet gets a fair share of every block.">
+<link rel="canonical" href="https://stonkz.green/">
+<meta name="theme-color" content="#3D5AC8">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="STONKZ">
+<meta property="og:title" content="STONKZ — the fair-launch ladder auction">
+<meta property="og:description" content="the crowd prices the launch block by block, and every active wallet gets a fair share of every block.">
+<meta property="og:url" content="https://stonkz.green/">
+<meta property="og:image" content="https://stonkz.green/assets/og-1200x630.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@stonkzgreen">
+<meta name="twitter:image" content="https://stonkz.green/assets/og-1200x630.png">
+<link rel="icon" href="assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sky1:#3D5AC8; --sky2:#7A4FC0; --sky3:#B0619F; --sun:#FF8A3C;
+  --w95:#C6C6C6; --w95d:#7D7D7D; --w95l:#FFFFFF; --w95dd:#3A3A3A;
+  --navy:#000A6B; --tbblue:#1E90FF; --ink:#101018;
+  --crt:#071410; --crt2:#0A1A14; --crtgrid:rgba(29,185,84,.13);
+  --phos:#35F08A; --phosdim:#1DB954; --phosdeep:#0E5F33; --teal:#0E8F87;
+  --green:#1DB954; --red:#E5484D; --amber:#E8A020; --gold:#FFE3A1;
+  --t-god:#FF3B30; --t-4h:#FF8A3C; --t-daily:#1DB954; --t-road:#1E90FF;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+html,body{margin:0;padding:0}
+body{
+  font-family:Rubik,system-ui,-apple-system,sans-serif;color:var(--ink);
+  background:linear-gradient(180deg,var(--sky1),var(--sky2) 58%,var(--sky3));
+  background-attachment:fixed;min-height:100vh;padding:0 0 76px;overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+/* Motion runs by default for everyone; the taskbar toggle turns it off and the
+   choice is remembered. The media query below only bites before JS runs (or with
+   JS disabled) — once JS boots it adds .force-motion and the toggle takes over. */
+@media (prefers-reduced-motion:reduce){
+  html:not(.force-motion){scroll-behavior:auto}
+  html:not(.force-motion) *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+}
+html.no-motion{scroll-behavior:auto}
+html.no-motion *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+.skip{position:absolute;left:-9999px;top:0;background:#fff;color:#000;padding:8px 12px;z-index:99;font-weight:700}
+.skip:focus{left:8px;top:8px}
+
+/* ── scenery ── */
+.scenery{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.scenery svg{position:absolute;filter:drop-shadow(4px 6px 0 rgba(0,0,0,.32))}
+#ar1{right:2vw;top:9vh;width:132px;animation:bob 5s ease-in-out infinite}
+#ar2{left:1vw;bottom:14vh;width:96px;opacity:.8;animation:bob 7s ease-in-out infinite reverse}
+#ar3{left:8vw;top:6vh;width:60px;opacity:.5;animation:bob 9s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(-14px) rotate(-2deg)}50%{transform:translateY(14px) rotate(2deg)}}
+@media(max-width:900px){#ar1{width:84px;opacity:.55}#ar2,#ar3{display:none}}
+
+/* ── layout ── */
+.wrap{position:relative;z-index:2;max-width:1180px;margin:0 auto;padding:0 18px}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:18px}
+.c12{grid-column:span 12}.c8{grid-column:span 8}.c7{grid-column:span 7}
+.c6{grid-column:span 6}.c5{grid-column:span 5}.c4{grid-column:span 4}
+@media(max-width:900px){.c8,.c7,.c6,.c5,.c4{grid-column:span 12}}
+section{scroll-margin-top:18px}
+.stack{margin-bottom:18px}
+
+/* ── win95 chrome ── */
+.win{background:var(--w95);border:2px solid;border-color:var(--w95l) var(--w95d) var(--w95d) var(--w95l);
+  box-shadow:3px 3px 0 rgba(0,0,0,.35);position:relative}
+.tb{display:flex;align-items:center;gap:8px;padding:4px 5px;
+  background:linear-gradient(90deg,var(--navy),var(--tbblue));color:#fff;font-weight:700;font-size:12.5px;
+  font-family:'IBM Plex Mono',monospace;letter-spacing:.02em;user-select:none}
+.tb.green{background:linear-gradient(90deg,#0B6B2C,var(--green))}
+.tb.amber{background:linear-gradient(90deg,#7A4E00,#E8B54A)}
+.tb.red{background:linear-gradient(90deg,#6B0B0B,var(--red))}
+.tb.grey{background:linear-gradient(90deg,#3A3A3A,#8A8A8A)}
+.tb .sp{flex:1}
+.xbtn{width:17px;height:15px;background:var(--w95);border:2px solid;
+  border-color:var(--w95l) var(--w95dd) var(--w95dd) var(--w95l);
+  color:#000;font-size:10px;line-height:11px;text-align:center;font-weight:700;font-family:Rubik}
+.body95{padding:14px}
+.inset{background:#fff;border:2px solid;border-color:var(--w95d) var(--w95l) var(--w95l) var(--w95d);padding:11px}
+.btn95{display:inline-block;background:var(--w95);border:2px solid;
+  border-color:var(--w95l) var(--w95dd) var(--w95dd) var(--w95l);text-decoration:none;
+  font-family:Rubik;font-weight:700;font-size:13px;padding:7px 14px;cursor:pointer;color:#000}
+.btn95:active{border-color:var(--w95dd) var(--w95l) var(--w95l) var(--w95dd);transform:translate(1px,1px)}
+.btn95.go{background:#B7F0C6}.btn95.gold{background:var(--gold)}
+.btn95:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #FFE3A1;outline-offset:2px}
+
+/* ── crt ── */
+.crt{
+  background:
+    repeating-linear-gradient(0deg,transparent 0 3px,rgba(0,0,0,.16) 3px 4px),
+    linear-gradient(0deg,var(--crtgrid) 1px,transparent 1px) 0 0/22px 22px,
+    linear-gradient(90deg,var(--crtgrid) 1px,transparent 1px) 0 0/22px 22px,
+    radial-gradient(120% 100% at 50% 0%,var(--crt2),var(--crt) 70%);
+  border:2px solid;border-color:var(--w95d) var(--w95l) var(--w95l) var(--w95d);
+  color:var(--phos);font-family:'IBM Plex Mono',monospace;
+  padding:12px;position:relative;overflow:hidden;text-shadow:0 0 6px rgba(53,240,138,.4);
+}
+.crt::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(120% 120% at 50% 50%,transparent 55%,rgba(0,0,0,.5))}
+.crt .lbl{color:var(--phosdeep);font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+.px{font-family:Silkscreen,'IBM Plex Mono',monospace}
+
+/* ── type ── */
+h1,h2,h3,h4{margin:0}
+.lockup{display:flex;align-items:center;gap:clamp(12px,2.2vw,22px)}
+.pfp{width:clamp(66px,11vw,108px);height:auto;display:block;flex-shrink:0;
+  border:3px solid #000;box-shadow:5px 5px 0 rgba(0,0,0,.45);background:var(--crt);
+  transform:rotate(-2deg)}
+.logo-sky{font-family:Impact,'Arial Black',sans-serif;color:#fff;-webkit-text-stroke:2.5px #000;
+  text-shadow:5px 5px 0 #000;transform:rotate(-2deg);letter-spacing:.13em;font-size:clamp(48px,9vw,92px);
+  display:inline-block;line-height:1;font-weight:400}
+.h2{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;letter-spacing:.02em;margin-bottom:8px}
+.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--w95dd)}
+.mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+.sub{font-size:12.5px;color:#4a4a52;line-height:1.55}
+.hint{font-size:11px;color:var(--w95dd);font-family:'IBM Plex Mono',monospace}
+p{line-height:1.6;font-size:13.5px;margin:0 0 11px}
+.rule{height:2px;background:var(--w95d);border-bottom:1px solid var(--w95l);margin:13px 0}
+.lede{color:#fff;font-size:clamp(15px,2.1vw,19px);line-height:1.5;max-width:34ch;
+  text-shadow:2px 2px 0 rgba(0,0,0,.45);margin:16px 0 18px}
+.lede b{background:rgba(0,0,0,.28);padding:0 4px}
+a{color:#0A3FA8}
+.body95 a{font-weight:500}
+
+/* ── stickers / stamps ── */
+.sticker{display:inline-block;background:#fff;border:2px solid #000;box-shadow:4px 4px 0 rgba(0,0,0,.5);
+  padding:6px 13px;font-weight:700;font-size:13.5px;transform:rotate(-1.5deg);margin-top:14px}
+.stamp{display:inline-block;font-family:Impact,'Arial Black',sans-serif;font-size:14px;letter-spacing:.05em;
+  padding:4px 10px;border:3px solid;transform:rotate(-3deg);box-shadow:3px 3px 0 rgba(0,0,0,.4);background:#fff}
+.stamp.stonkz{color:#0B6B2C;border-color:#0B6B2C}
+.stamp.gold{color:#7A4E00;border-color:#7A4E00;background:var(--gold)}
+
+/* ── hero ── */
+header{padding:34px 0 22px}
+.heroGrid{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:center}
+@media(max-width:900px){.heroGrid{grid-template-columns:1fr;gap:18px}}
+.heroCta{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
+nav.top{display:flex;gap:14px;flex-wrap:wrap;margin-top:20px}
+nav.top a{color:#fff;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.06em;
+  text-decoration:none;border-bottom:2px solid rgba(255,255,255,.45);padding-bottom:1px}
+nav.top a:hover{border-bottom-color:#fff}
+
+/* ── ladder demo ── */
+.ladder{display:flex;flex-direction:column-reverse;gap:2px;height:132px;justify-content:flex-start;margin:8px 0 10px}
+.rung{height:9px;background:var(--phosdeep);position:relative;transition:width .18s ease,background .18s ease}
+.rung.hot{background:var(--phos)}
+.rung.den{background:#5A2B2B}
+.readout{display:grid;grid-template-columns:repeat(2,1fr);gap:6px 14px;font-size:12px}
+.readout div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dotted rgba(53,240,138,.22);padding-bottom:3px}
+.readout span:first-child{color:var(--phosdeep);letter-spacing:.06em;text-transform:uppercase;font-size:10px;align-self:flex-end}
+.readout b{font-weight:600}
+#dState{font-family:Silkscreen,'IBM Plex Mono',monospace;font-size:13px}
+.flash{animation:fl .5s ease}
+@keyframes fl{0%{color:#fff;text-shadow:0 0 14px #fff}100%{color:var(--phos)}}
+
+/* ── event feed ── */
+.feedbar{background:var(--crt);border-top:2px solid var(--phosdeep);border-bottom:2px solid #000;
+  overflow:hidden;position:relative;z-index:2;margin:20px 0 26px;height:30px;display:flex;align-items:center}
+.feedbar ul{display:flex;gap:34px;list-style:none;margin:0;padding:0 0 0 100%;white-space:nowrap;
+  animation:slide 42s linear infinite;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--phos)}
+@keyframes slide{from{transform:translateX(0)}to{transform:translateX(-100%)}}
+.feedbar li em{color:var(--phosdeep);font-style:normal}
+
+/* ── tables ── */
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{background:var(--navy);color:#fff;text-align:left;padding:6px 8px;font-family:'IBM Plex Mono',monospace;
+  font-size:11px;letter-spacing:.05em;font-weight:700}
+td{background:#fff;border-bottom:1px solid #D8D8D8;padding:7px 8px;vertical-align:top}
+td small{display:block;color:#6a6a72;font-size:11px;margin-top:2px}
+.tname{font-family:Impact,'Arial Black',sans-serif;letter-spacing:.04em;font-size:14px}
+
+/* ── mechanism bullets ── */
+.bul{margin:0;padding:0;list-style:none}
+.bul li{padding:9px 0;border-bottom:1px dashed #C9C9CF;font-size:13px;line-height:1.55}
+.bul li:last-child{border-bottom:0}
+.bul b{display:block;font-family:'IBM Plex Mono',monospace;font-size:12.5px;margin-bottom:2px}
+details{margin-top:6px}
+summary{cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#0A3FA8;letter-spacing:.03em}
+details[open] summary{color:var(--w95dd)}
+.formula{margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;line-height:1.6;
+  background:var(--crt);color:var(--phos);padding:9px 10px;border:2px solid;
+  border-color:var(--w95d) var(--w95l) var(--w95l) var(--w95d);overflow-x:auto}
+
+/* ── notepad ── */
+.notepad{background:#fff;border:2px solid;border-color:var(--w95d) var(--w95l) var(--w95l) var(--w95d);
+  font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.75;padding:12px;white-space:pre-wrap}
+
+/* ── status ── */
+.stat{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dashed #C9C9CF;font-size:12.5px}
+.stat:last-child{border-bottom:0}
+.pill{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.08em;padding:2px 7px;border:2px solid;
+  text-transform:uppercase;white-space:nowrap;flex-shrink:0}
+.pill.done{background:#B7F0C6;border-color:#0B6B2C;color:#0B6B2C}
+.pill.now{background:var(--gold);border-color:#7A4E00;color:#7A4E00}
+.pill.next{background:#E4E4E8;border-color:var(--w95dd);color:var(--w95dd)}
+
+/* ── footer ── */
+footer{position:relative;z-index:2;margin-top:26px;background:rgba(7,20,16,.86);border-top:3px solid #000;
+  color:#C9D8CF;padding:26px 0 22px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;line-height:1.7}
+footer .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:16px}
+@media(max-width:700px){footer .cols{grid-template-columns:1fr}}
+footer h4{color:var(--phos);font-size:11px;letter-spacing:.16em;text-transform:uppercase;margin-bottom:6px}
+footer a{color:#8FE9B7;text-decoration:none;border-bottom:1px dotted #3d6f56}
+footer a:hover{color:#fff}
+.fine{color:#7E9389;max-width:78ch}
+
+/* ── taskbar ── */
+.taskbar{position:fixed;left:0;right:0;bottom:0;height:34px;background:var(--w95);
+  border-top:2px solid var(--w95l);display:flex;align-items:center;gap:10px;padding:0 8px;z-index:20;
+  box-shadow:0 -3px 0 rgba(0,0,0,.25)}
+.taskbar .tbi{cursor:pointer;background:var(--w95);border:2px solid;border-color:var(--w95l) var(--w95dd) var(--w95dd) var(--w95l);
+  font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:11.5px;padding:3px 9px;color:#000;text-decoration:none}
+.clock{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11.5px;
+  border:2px solid;border-color:var(--w95d) var(--w95l) var(--w95l) var(--w95d);padding:2px 8px;background:#C6C6C6}
+.tstatus{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#3A3A3A;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:640px){.tstatus{display:none}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">skip to content</a>
+
+<div class="scenery" aria-hidden="true">
+  <svg id="ar1" viewBox="0 0 100 120"><path d="M50 4 96 58H72v58H28V58H4z" fill="#35F08A" stroke="#000" stroke-width="6" stroke-linejoin="round"/></svg>
+  <svg id="ar2" viewBox="0 0 100 120"><path d="M50 4 96 58H72v58H28V58H4z" fill="#FFE3A1" stroke="#000" stroke-width="6" stroke-linejoin="round"/></svg>
+  <svg id="ar3" viewBox="0 0 100 120"><path d="M50 4 96 58H72v58H28V58H4z" fill="#fff" stroke="#000" stroke-width="6" stroke-linejoin="round"/></svg>
+</div>
+
+<header>
+<div class="wrap">
+  <div class="heroGrid">
+    <div>
+      <div class="lockup">
+        <img class="pfp" width="224" height="224" alt="" decoding="async"
+             src="data:image/png;base64,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">
+        <h1 class="logo-sky">STONKZ</h1>
+      </div>
+      <p class="lede">the crowd prices the launch <b>block by block</b>, and every active wallet gets a <b>fair share of every block</b>.</p>
+      <div class="heroCta">
+        <a class="btn95 go" href="#ladder">how the ladder works</a>
+        <a class="btn95" href="mailto:hello@stonkz.green">hello@stonkz.green</a>
+        <a class="btn95" href="https://x.com/stonkzgreen" rel="me noopener">𝕏 @stonkzgreen</a>
+      </div>
+      <div class="sticker">launchpad of grate value ☝</div>
+      <nav class="top" aria-label="sections">
+        <a href="#ladder">the ladder</a>
+        <a href="#tiers">tiers</a>
+        <a href="#express">express</a>
+        <a href="#engineering">engineering</a>
+        <a href="#token">protocol token</a>
+        <a href="#status">status</a>
+        <a href="#contact">contact</a>
+      </nav>
+    </div>
+
+    <div class="win" id="demoWin">
+      <div class="tb green"><span>ladder_demo.exe</span><span class="sp"></span><span class="xbtn" aria-hidden="true">×</span></div>
+      <div class="body95">
+        <div class="crt">
+          <div class="lbl">simulation · seeded · not live market data</div>
+          <div class="ladder" id="ladderViz" aria-hidden="true"></div>
+          <div class="readout">
+            <div><span>price</span><b class="mono" id="dPrice">0.000000</b></div>
+            <div><span>rung</span><b class="mono" id="dRung">0</b></div>
+            <div><span>active wallets</span><b class="mono" id="dActive">0</b></div>
+            <div><span>fill / wallet</span><b class="mono" id="dFill">0</b></div>
+            <div style="grid-column:span 2;border-bottom:0;padding-top:4px">
+              <span>state</span><b id="dState">booting</b>
+            </div>
+          </div>
+        </div>
+        <p class="hint" style="margin:9px 0 0">a toy of the real mechanism, running in your browser. no wallet, no chain, no numbers you can trade on.</p>
+      </div>
+    </div>
+  </div>
+</div>
+</header>
+
+<div class="feedbar" aria-hidden="true"><ul id="feed"></ul></div>
+
+<main id="main">
+<div class="wrap">
+
+<!-- ══ WHAT IT IS ══ -->
+<div class="grid stack">
+  <section class="c7" id="what">
+    <div class="win">
+      <div class="tb"><span>welcome.exe</span><span class="sp"></span><span class="xbtn" aria-hidden="true">×</span></div>
+      <div class="body95">
+        <h2 class="h2">what stonkz is</h2>
+        <p>a token launchpad on <b>Robinhood Chain</b>, built around one idea we couldn't find anywhere else: a launch should be <b>priced by the people showing up</b>, not won by whoever pays the most gas in the first block.</p>
+        <p>two ways to launch. the <b>ladder auction</b> — a timed, per-capita price-discovery auction that opens a Uniswap v4 pool with real depth behind it. or <b>express</b> — straight to the DEX at a fixed starting market cap, liquidity burnt on arrival.</p>
+        <div class="inset">
+          <div class="eyebrow" style="margin-bottom:5px">the short version</div>
+          <ul class="bul">
+            <li><b>per-capita fills</b>every active wallet gets a fair share of every block's tranche. bid size still counts for something — but it's logarithmically damped, so a $10,000 bid takes a slice only slightly bigger than a $10 one, not a thousand times bigger.</li>
+            <li><b>the crowd sets the price</b>the price only climbs when the previous block sold out. no demand, no climb.</li>
+            <li><b>the pool is the point</b>the auction's job is to open a market with depth, not to end at a big number.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="c5" id="notready">
+    <div class="win">
+      <div class="tb amber"><span>readme.txt</span><span class="sp"></span><span class="xbtn" aria-hidden="true">×</span></div>
+      <div class="body95">
+        <div class="notepad">the launchpad is not open yet.
+
+there is no app to connect a wallet to,
+no token to buy, no presale, no allowlist,
+no airdrop form, and no one from stonkz
+will ever DM you a link.
+
+contracts are written and under test.
+mainnet comes after the audit ladder in
+built_different.txt — not before.
+
+this page exists so you can read the
+mechanism, check the engineering, and
+decide whether we're worth watching.
+
+— stonkz.green</div>
+        <div style="margin-top:11px"><span class="stamp gold">PRE-LAUNCH</span></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ══ LADDER ══ -->
+<div class="grid stack">
+  <section class="c7" id="ladder">
+    <div class="win">
+      <div class="tb green"><span>ladder_auction.exe</span><span class="sp"></span><span class="xbtn" aria-hidden="true">×</span></div>
+      <div class="body95">
+        <h2 class="h2">the ladder auction</h2>
+        <p>supply is released in tranches, one per block. the price sits on a rung. every rung the crowd clears, the ladder steps up. every rung it doesn't, the ladder re-offers the same price and waits.</p>
+        <div class="inset">
+          <ul class="bul">
+            <li><b>per-capita fills — the whole point</b>
+              each block's tranche is split across every wallet with a live bid at or above the current rung — per wallet, not per dollar. a size bonus tilts the split toward larger bids, but it enters through a logarithm and is bounded by the creator's filed bonus parameter, so scaling your bid by 1,000× moves your share by single-digit percent. bid size mostly decides <i>whether</i> you're filled, barely <i>how much</i>. multiple bids from one wallet show separately in the book and share one fill share.
+              <details><summary>show the formula ▸</summary><div class="formula">fill_i = (tranche_block / active_wallets)
+         × (1 + α · log₂(1 + bonus_i))
+
+active_wallets = wallets with ≥1 live bid whose
+                 maxPrice ≥ current rung price
+
+α is the creator's filed size-bonus parameter.
+the log₂ is what mutes it: the tilt grows with
+the logarithm of bid size, never with bid size.
+per-wallet supply cap still binds on top.
+α = 0 gives a strictly equal split.</div></details>
+            </li>
+            <li><b>the demand gate — price climbs on proof</b>
+              the rung only advances if the prior tranche fully cleared. partial clear means the price is re-offered flat. a ladder that stops climbing is telling you something true.
+              <details><summary>show the formula ▸</summary><div class="formula">if tranche_sold == tranche_offered:
+    rung += 1        # step rate is per-auction,
+                     # applied as the N-th root per block
+else:
+    rung stays       # re-offer flat, gate denied</div></details>
+            </li>
+            <li><b>the freeze — two-wallet minimum</b>
+              with fewer than two active wallets there is no crowd, so there is no price discovery. the ladder freezes until a second wallet shows up. that's the rule, not a bug.
+            </li>
+            <li><b>the accelerator — scarcity moves faster</b>
+              as the launch allocation drains, the step rate rises. the last of the supply is priced like the last of the supply.
+              <details><summary>show the formula ▸</summary><div class="formula">heat is keyed to allocation depletion, not to
+capital. β = 2 by default. rates are normalised
+over the auction's block count so a 1-hour and a
+7-day auction with the same parameters end in the
+same place — duration invariance is a named
+invariant in the test suite.</div></details>
+            </li>
+            <li><b>the bell — graduation is a gate, not a party</b>
+              at the end, the raise must clear the creator's declared threshold <i>and</i> the resulting pool must land inside its LP HELTH band. clear both and the bell rings: liquidity is placed, the pool opens, trading starts where the crowd left it.
+              <details><summary>show the formula ▸</summary><div class="formula">ρ = (pool cash + pool token value) / market cap
+
+graduation requires:
+  raised ≥ threshold
+  ρ inside the tier's band
+  cash floor ≥ band_width / 3
+
+measured and certified on-chain at graduation.
+machine-enforced — there is no override.</div></details>
+            </li>
+          </ul>
+        </div>
+        <p class="sub" style="margin-top:11px"><b>outcome:</b> the chart opens where the crowd priced it — with real depth behind it, and a fill history anyone can read block by block.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="c5" id="tiers">
+    <div class="win">
+      <div class="tb"><span>launch_tiers.exe</span><span class="sp"></span><span class="xbtn" aria-hidden="true">×</span></div>
+      <div class="body95">
+        <h2 class="h2">four tiers</h2>
+        <p class="sub" style="margin-bottom:10px">the creator picks how long the crowd gets. everything else is tuned to that choice — step heat, the accelerator, and how much pool health the tier has to prove.</p>
+        <table>
+          <thead><tr><th>tier</th><th>length</th><th>LP HELTH band</th></tr></thead>
+          <tbody>
+            <tr><td><span class="tname" style="color:var(--t-god)">GOD CANDLE</span><small>hottest steps, thinnest patience</small></td><td class="mono">1 hour</td><td class="mono">40–50%</td></tr>
+            <tr><td><span class="tname" style="color:var(--t-4h)">THE 4H</span><small>an afternoon of price discovery</small></td><td class="mono">4 hours</td><td class="mono">45–55%</td></tr>
+            <tr><td><span class="tname" style="color:var(--t-daily)">THE DAILY</span><small>the default. every timezone gets a turn</small></td><td class="mono">24 hours</td><td class="mono">50–60%</td></tr>
+            <tr><td><span class="tname" style="color:var(--t-road)">THE ROADSHOW</span><small>a full week of book building</small></td><td class="mono">7 days</td><td class="mono">55–65%</td></tr>
+          </tbody>
+        </table>
+        <div class="rule"></div>
+        <p class="hint">the band is total pool value (cash + token) measured against market cap at graduation. longer auctions have to prove more health, because they had more time to build it.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ══ EXPRESS + ENGINEERING ══ -->
+<div class="grid stack">
+  <section class="c5" id="express">
+    <div class="win">
+      <div class="tb"><span>express.exe</span><span class="sp"></span><span class="xbtn" aria-hidden="true">×</span></div>
+      <div class="body95">
+        <h2 class="h2">express — straight to the DEX</h2>
+        <p>not every token wants a book. express launches open a Uniswap v4 pool immediately at a fixed starting market cap.</p>
+        <ul class="bul">
+          <li><b>two starting tiers</b>$4,000 or $8,000 starting market cap. the volatility difference between them is emergent, not a dial we set.</li>
+          <li><b>all of the launch supply becomes liquidity, and none of it can leave</b>nothing is held loose at launch. 95% is placed in your token's own pool as a burnt one-sided position from the starting tick upward; the remaining 5% seeds the protocol side pool. <b style="display:inline">both positions are locked forever</b> — not withdrawable by the creator, and not by us either. two pools, 100% of the launch supply deployed across them, zero of it retrievable.</li>
+          <li><b>the 5% side pool</b>a one-sided pair against the protocol token that accretes on your token's success and is immune to its failure. it is the protocol's take on an express launch — and we take it the same way we ask you to: locked in a pool we can't withdraw from, earning fees that compound back into the position.</li>
+          <li><b>creator reserves are declared and vested</b>same rules as the auction: declare the use, take the vesting schedule, or don't reserve.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="c7" id="engineering">
+    <div class="win">
+      <div class="tb grey"><span>built_different.txt</span><span class="sp"></span><span class="xbtn" aria-hidden="true">×</span></div>
+      <div class="body95">
+        <p class="sub" style="margin-bottom:10px">we don't lead with security, because security isn't a feature — it's the floor. here's the floor, stated flatly.</p>
+        <div class="notepad">DIFFERENTIAL TESTING
+  the auction exists twice: once in Solidity, once as an
+  independent JavaScript reference engine. every mechanism
+  change must produce identical output in both. CI fails on
+  a single divergence.
+
+MACHINE-CHECKED INVARIANTS
+  properties, not examples. fuzz campaigns and invariant
+  runs assert things like conservation of supply, duration
+  invariance, and the two-wallet freeze on every seed —
+  not just on the cases we thought to write down.
+
+IMMUTABLE CONTRACTS
+  deployed auction and settlement contracts are not
+  upgradeable. no proxy, no admin key that can rewrite a
+  live auction's rules mid-flight. what you read is what
+  runs, for as long as it runs.
+
+CAPPED BLAST RADIUS AT LAUNCH
+  hard per-auction and global TVL caps on day one. a new
+  mechanism should not be allowed to hold more than it has
+  earned the right to hold.
+
+THE AUDIT LADDER, IN ORDER
+  1. internal fuzz + invariant campaigns        [running]
+  2. public audit contest (Code4rena / Sherlock) [planned]
+  3. bug bounty, live from day one              [planned]
+  4. tier-1 firm audit                          [planned]
+  mainnet does not open before this ladder is climbed.
+
+RESPONSIBLE DISCLOSURE
+  security researchers: hello@stonkz.green. scope, safe
+  harbour, and bounty tiers will be published here before
+  mainnet. we will always credit you unless you ask us
+  not to.</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ══ TOKEN + STATUS ══ -->
+<div class="grid stack">
+  <section class="c6" id="token">
+    <div class="win">
+      <div class="tb"><span>protocol_token.exe</span><span class="sp"></span><span class="xbtn" aria-hidden="true">×</span></div>
+      <div class="body95">
+        <h2 class="h2">the protocol token</h2>
+        <p>stonkz will have one. it is <b>unnamed and unlaunched</b>, and it will go through the same ladder auction as everyone else — same contract, same per-capita fills, parameters published in advance.</p>
+        <div class="inset">
+          <ul class="bul">
+            <li><b>the fee split, stated exactly</b>every launched token routes a share of its ongoing trading fees to the protocol. the protocol take is currently <span class="mono">25%</span>, is hard-capped at <span class="mono">40%</span> forever by the contract, and is <b>stamped immutably into your token at launch</b> — the number in the launch wizard is the number you keep.</li>
+            <li><b>what the protocol share funds</b>a portion funds buyback-and-burn of the protocol token. the rest funds building this. we're not going to pretend it's all burn.</li>
+            <li><b>no private round, no team allocation off the top</b>reserves are declared, published, and vested on the same schedule any creator has to accept.</li>
+          </ul>
+        </div>
+        <p class="hint" style="margin-top:10px">nothing here is an offer, a sale, or a promise of value. it's a description of how a fee contract is wired.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="c6" id="status">
+    <div class="win">
+      <div class="tb amber"><span>status.txt</span><span class="sp"></span><span class="xbtn" aria-hidden="true">×</span></div>
+      <div class="body95">
+        <h2 class="h2">where we actually are</h2>
+        <div class="stat"><span class="pill done">done</span><span>auction engine, settlement, fee hook, direct-to-DEX and community-takeover governance: written, merged, CI green.</span></div>
+        <div class="stat"><span class="pill now">now</span><span>ladder v1.5 under simulation — tier tuning, the accelerator, and the LP HELTH gate.</span></div>
+        <div class="stat"><span class="pill next">next</span><span>live Uniswap v4 integration, then public testnet.</span></div>
+        <div class="stat"><span class="pill next">next</span><span>the audit ladder, in the order printed in built_different.txt.</span></div>
+        <div class="stat"><span class="pill next">then</span><span>guarded mainnet, with TVL caps on.</span></div>
+        <div class="rule"></div>
+        <p class="sub">no launch date. when we have one that survives contact with an auditor, it'll be posted here and on <a href="https://x.com/stonkzgreen" rel="me noopener">@stonkzgreen</a> first.</p>
+        <div><span class="stamp stonkz">SHIP WHEN READY</span></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ══ CONTACT ══ -->
+<div class="grid stack">
+  <section class="c12" id="contact">
+    <div class="win">
+      <div class="tb"><span>contact.exe</span><span class="sp"></span><span class="xbtn" aria-hidden="true">×</span></div>
+      <div class="body95">
+        <div class="grid">
+          <div class="c6">
+            <h2 class="h2">talk to us</h2>
+            <p>one inbox, read by a human: <a href="mailto:hello@stonkz.green">hello@stonkz.green</a>.</p>
+            <p class="sub">business and partnerships · security disclosures · press · creators who want early access to the launch wizard when testnet opens.</p>
+            <div class="heroCta" style="margin-top:12px">
+              <a class="btn95 go" href="mailto:hello@stonkz.green">✉ email us</a>
+              <a class="btn95" href="https://x.com/stonkzgreen" rel="me noopener">𝕏 follow @stonkzgreen</a>
+            </div>
+          </div>
+          <div class="c6">
+            <div class="crt">
+              <div class="lbl">official surfaces — everything else is a fake</div>
+              <div style="margin-top:8px;font-size:12.5px;line-height:2">
+                site &nbsp;<b>stonkz.green</b><br>
+                alias&nbsp;<b>stonkz.meme</b><br>
+                mail &nbsp;<b>hello@stonkz.green</b><br>
+                𝕏 &nbsp;&nbsp;&nbsp;<b>@stonkzgreen</b>
+              </div>
+              <div style="margin-top:10px;color:var(--phosdeep);font-size:11px;line-height:1.6">
+                we will never DM you first. we will never ask for a seed phrase. there is no presale.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+</div>
+</main>
+
+<footer>
+<div class="wrap">
+  <div class="cols">
+    <div>
+      <h4>stonkz</h4>
+      <a href="#ladder">the ladder auction</a><br>
+      <a href="#tiers">launch tiers</a><br>
+      <a href="#express">express</a><br>
+      <a href="#engineering">engineering standards</a>
+    </div>
+    <div>
+      <h4>protocol</h4>
+      <a href="#token">protocol token</a><br>
+      <a href="#status">build status</a><br>
+      <span>chain: Robinhood Chain</span><br>
+      <span>settlement: Uniswap v4</span>
+    </div>
+    <div>
+      <h4>reach us</h4>
+      <a href="mailto:hello@stonkz.green">hello@stonkz.green</a><br>
+      <a href="https://x.com/stonkzgreen" rel="me noopener">@stonkzgreen</a><br>
+      <span>security: same inbox, marked SECURITY</span>
+    </div>
+  </div>
+  <p class="fine">© 2026 STONKZ. this page describes software that is not yet deployed to mainnet. nothing here is financial, investment, legal or tax advice, an offer or solicitation to buy or sell any asset, or a promise of any return. digital assets are volatile and can go to zero; permissionless launch software does not vet the tokens launched with it, and you are responsible for your own diligence. availability may be restricted in some jurisdictions. we cannot even spell securites.</p>
+</div>
+</footer>
+
+<div class="taskbar">
+  <a class="tbi" href="#main">▲ START</a>
+  <button class="tbi" id="motionBtn" type="button" aria-pressed="true">⏸ motion: on</button>
+  <span class="tstatus" id="tStatus">stonkz.green · pre-launch · contracts under test</span>
+  <span class="clock mono" id="clock">--:--</span>
+</div>
+
+<script>
+/* ══ STONKZ site — helpers first, boot last ══ */
+(function(){
+  "use strict";
+
+  /* deterministic PRNG so the demo is reproducible */
+  var seed = 4663;
+  function rnd(){ seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; }
+
+  /* MOTION POLICY (human ruling): motion runs by default for everyone, including
+     visitors whose OS asks for reduced motion. The taskbar toggle turns it off,
+     the choice is remembered, and ?motion=off works as a direct link.
+     What motion actually covers: the arrow bob, the ticker scroll, the price
+     flash and the ladder tick. No information is motion-only — the CRT readout
+     shows the same numbers either way. */
+  var STORE_KEY = 'stonkz:motion';
+
+  function readPref(){
+    var v = null;
+    try { v = new URLSearchParams(window.location.search).get('motion'); } catch(e){}
+    if(v !== 'on' && v !== 'off'){
+      try { v = window.localStorage.getItem(STORE_KEY); } catch(e){ v = null; }
+    }
+    return v === 'off' ? 'off' : 'on';   /* default: on */
+  }
+
+  function writePref(v){
+    try { window.localStorage.setItem(STORE_KEY, v); } catch(e){}
+  }
+
+  var reduced = readPref() === 'off';
+  var stepTimer = null;
+
+  function applyMotionClass(){
+    var c = document.documentElement.classList;
+    c.toggle('force-motion', !reduced);
+    c.toggle('no-motion', reduced);
+  }
+  applyMotionClass();
+
+  /* ---------- clock ---------- */
+  function tickClock(){
+    var el = document.getElementById('clock');
+    if(!el) return;
+    var d = new Date();
+    el.textContent = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+
+  /* ---------- event feed ---------- */
+  var FEED_SEED = [
+    ['🔔','graduated','ρ certified 54.1% · band 50–60% · pool opened'],
+    ['☝','fill','1,412 wallets · per-capita fill · rung 61'],
+    ['❄','freeze','actives < 2 · price locked · that is the rule'],
+    ['☠','gate denied','tranche did not clear · rung re-offered flat'],
+    ['🏥','LP HELTH','band-first disposal · cash floor cleared'],
+    ['▲','climb','demand gate passed · rung 62'],
+  ];
+  function buildFeed(){
+    var ul = document.getElementById('feed');
+    if(!ul) return;
+    var html = '';
+    for(var pass=0; pass<2; pass++){
+      for(var i=0;i<FEED_SEED.length;i++){
+        var f = FEED_SEED[i];
+        html += '<li>' + f[0] + ' <em>' + f[1] + '</em> · ' + f[2] + '</li>';
+      }
+    }
+    ul.innerHTML = html;
+  }
+
+  /* ---------- ladder demo ---------- */
+  var RUNGS = 12;
+  var d = { price: 0.000412, rung: 47, actives: 6, rungs: [], state: 'climbing', denied: 0 };
+
+  function el(id){ return document.getElementById(id); }
+
+  function drawLadder(){
+    var host = el('ladderViz');
+    if(!host) return;
+    var min = Infinity, max = -Infinity, i;
+    for(i=0;i<d.rungs.length;i++){
+      if(d.rungs[i].p < min) min = d.rungs[i].p;
+      if(d.rungs[i].p > max) max = d.rungs[i].p;
+    }
+    var span = (max - min) || 1;
+    var html = '';
+    for(i=0;i<d.rungs.length;i++){
+      var r = d.rungs[i];
+      var w = 22 + ((r.p - min) / span) * 74;
+      var cls = r.denied ? 'rung den' : (i === d.rungs.length-1 ? 'rung hot' : 'rung');
+      html += '<div class="' + cls + '" style="width:' + w.toFixed(1) + '%"></div>';
+    }
+    host.innerHTML = html;
+  }
+
+  function setState(txt){
+    var s = el('dState');
+    if(s) s.textContent = txt;
+    d.state = txt;
+  }
+
+  function step(){
+    /* actives drift */
+    d.actives += (rnd() < 0.5 ? -1 : 1) * Math.round(rnd() * 2);
+    if(d.actives < 1) d.actives = 1;
+    if(d.actives > 14) d.actives = 14;
+
+    var denied = false;
+
+    if(d.actives < 2){
+      setState('FROZEN — actives < 2');
+    } else {
+      var cleared = rnd() < 0.66;
+      if(cleared){
+        d.price = d.price * (1 + 0.004 + rnd() * 0.012);
+        d.rung += 1;
+        setState('CLIMBING');
+      } else {
+        denied = true;
+        setState('GATE DENIED — re-offered flat');
+      }
+    }
+
+    d.rungs.push({ p: d.price, denied: denied });
+    if(d.rungs.length > RUNGS) d.rungs.shift();
+
+    var tranche = 180000 + Math.round(rnd() * 40000);
+    var fill = Math.round(tranche / Math.max(d.actives,1));
+
+    var pEl = el('dPrice');
+    if(pEl){
+      pEl.textContent = d.price.toFixed(6);
+      if(!denied && d.actives >= 2 && !reduced){
+        pEl.classList.remove('flash');
+        void pEl.offsetWidth;
+        pEl.classList.add('flash');
+      }
+    }
+    var rEl = el('dRung');   if(rEl) rEl.textContent = String(d.rung);
+    var aEl = el('dActive'); if(aEl) aEl.textContent = String(d.actives);
+    var fEl = el('dFill');   if(fEl) fEl.textContent = fill.toLocaleString('en-US');
+
+    drawLadder();
+  }
+
+  /* ---------- boot ---------- */
+  function boot(){
+    tickClock();
+    setInterval(tickClock, 20000);
+    buildFeed();
+
+    /* prime the ladder */
+    var i;
+    for(i=0;i<RUNGS;i++) step();
+
+    if(reduced) pauseMotion(); else startMotion();
+
+    var btn = el('motionBtn');
+    if(btn){
+      syncBtn(btn);
+      btn.addEventListener('click', function(){
+        reduced = !reduced;
+        applyMotionClass();
+        writePref(reduced ? 'off' : 'on');
+        if(reduced) pauseMotion(); else startMotion();
+        syncBtn(btn);
+      });
+    }
+  }
+
+  function syncBtn(btn){
+    btn.textContent = reduced ? '▶ motion: off' : '⏸ motion: on';
+    btn.setAttribute('aria-pressed', String(!reduced));
+  }
+
+  function feedEl(){ return document.querySelector('.feedbar ul'); }
+
+  function startMotion(){
+    var fb = feedEl();
+    if(fb) fb.style.animation = '';
+    if(!stepTimer) stepTimer = setInterval(step, 900);
+    step();
+  }
+
+  function pauseMotion(){
+    if(stepTimer){ clearInterval(stepTimer); stepTimer = null; }
+    var fb = feedEl();
+    if(fb) fb.style.animation = 'none';
+    setState('PAUSED — reduced motion');
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+# STONKZ — static marketing site for stonkz.green
+# Blueprint reference: https://render.com/docs/blueprint-spec
+# Validate locally with:  render blueprints validate render.yaml
+
+services:
+  - type: web
+    name: stonkz-site
+    runtime: static
+    # No framework, no bundler — public/ is shipped as-is.
+    buildCommand: "echo 'static site — no build step'"
+    staticPublishPath: ./public
+
+    previews:
+      generation: automatic   # branch/PR previews before anything hits stonkz.green
+
+    # Custom domains. Render auto-adds the matching www. subdomain for each root
+    # domain and redirects it here. DNS still has to be pointed manually — see README.
+    domains:
+      - stonkz.green
+      - stonkz.meme
+
+    routes:
+      # Anything that isn't a real file lands on the branded 404 page.
+      # Caveat: Render rewrites serve HTTP 200, so this is a soft 404.
+      # Swap `rewrite` for `redirect` + destination `/` if that ever matters for SEO.
+      - type: rewrite
+        source: /*
+        destination: /404.html
+
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Permissions-Policy
+        value: geolocation=(), microphone=(), camera=(), payment=(), usb=()
+      - path: /*
+        name: Strict-Transport-Security
+        value: max-age=31536000; includeSubDomains
+      # Inline CSS/JS is deliberate (single-file site), hence 'unsafe-inline'.
+      # Fonts come from Google Fonts; nothing else is allowed to load or connect.
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'; upgrade-insecure-requests"
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /index.html
+        name: Cache-Control
+        value: public, max-age=0, must-revalidate
