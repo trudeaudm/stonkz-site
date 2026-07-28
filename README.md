@@ -1,7 +1,8 @@
 # stonkz-site
 
-Official marketing site for **stonkz.green**. Static, no build step, no framework — a single
-self-contained `index.html` plus assets, deployed on **Render** as a static site.
+Official marketing site for **stonkz.green** (primary) with **stonkz.meme** as
+alias. Static, no build step, no framework — a single self-contained
+`index.html` plus assets, deployed on **Render** as a static site.
 
 ```
 render.yaml          Render Blueprint (static site + headers + routes)
@@ -11,7 +12,7 @@ public/
   robots.txt
   sitemap.xml
   site.webmanifest
-  assets/            favicons, touch icon, og image, avatar, banner
+  assets/            favicons, touch icon, og image, avatar, banner, X profile assets
 ```
 
 Local preview:
@@ -23,9 +24,22 @@ cd public && python3 -m http.server 8080
 
 ---
 
+## Stack (owner ruling — do not reintroduce Cloudflare)
+
+| Layer | Provider | Notes |
+|---|---|---|
+| Hosting | **Render** | Blueprint from `render.yaml`; auto-deploys on push to `main` |
+| DNS | **Namecheap** | Apex A → Render; www CNAME → Render hostname |
+| Email | **Google Workspace** | `hello@stonkz.green`; SPF + DKIM for Google |
+
+Cloudflare Pages / Cloudflare DNS / Cloudflare Email Routing were earlier plans
+and are **superseded**. Do not suggest or restore them.
+
+---
+
 ## Deploy runbook
 
-### 1. Create the repo and push
+### 1. Create the repo and push (one-time)
 
 ```bash
 cd stonkz-site
@@ -35,7 +49,7 @@ git commit -m "stonkz.green — static marketing site"
 gh repo create trudeaudm/stonkz-site --public --source=. --remote=origin --push
 ```
 
-### 2. Create the Render service
+### 2. Create the Render service (one-time)
 
 Render Dashboard → **New** → **Blueprint** → connect `trudeaudm/stonkz-site` → it reads
 `render.yaml` and creates a static site named `stonkz-site` on the free plan.
@@ -46,28 +60,10 @@ The Blueprint is preferred — it carries the security headers and cache rules w
 First deploy takes ~1 minute and lands on `https://stonkz-site.onrender.com`. Verify the
 site loads there **before** touching DNS.
 
-### 3. Point the domains
+### 3. Point the domains (Namecheap)
 
 `render.yaml` already declares `stonkz.green` and `stonkz.meme` as custom domains, and
-Render adds the matching `www.` subdomains automatically as redirects. They'll show as
-unverified until DNS points at Render.
-
-Then set DNS. **Two paths depending on where the zone lives:**
-
-**If the zone stays at Cloudflare** (recommended — it keeps Email Routing for
-`hello@stonkz.green` working, which is a hard prerequisite for the X Verified Orgs
-application):
-
-| type | name | value | proxy |
-|---|---|---|---|
-| CNAME | `@` | `stonkz-site.onrender.com` | **DNS only (grey cloud)** |
-| CNAME | `www` | `stonkz-site.onrender.com` | **DNS only (grey cloud)** |
-
-Cloudflare flattens the apex CNAME automatically. Proxy **must** be off during
-verification and certificate issuance; it can be turned on afterwards, but leaving it off
-is simpler and Render already fronts a CDN.
-
-**If the zone is at a registrar without ALIAS/CNAME-flattening:**
+Render adds the matching `www.` subdomains automatically as redirects.
 
 | type | name | value |
 |---|---|---|
@@ -86,19 +82,20 @@ Back in Render → **Custom Domains** → **Verify**. Certificates issue automat
 (Let's Encrypt) once DNS resolves; HTTP→HTTPS redirect is automatic. Check propagation
 with `dig stonkz.green` or dnschecker.org if verification fails, then retry.
 
-### 5. Email — do this before the X application
+### 5. Email (Google Workspace)
 
-Cloudflare → **Email Routing** → enable → add `hello@stonkz.green` forwarding to a real
-inbox. This adds MX + SPF records automatically and does not conflict with the CNAMEs
-above. The X Verified Organizations application requires a domain email address; a Gmail
-address will fail review.
+Add `stonkz.green` in Google Workspace (secondary domain or primary). Set MX to
+Google's (`smtp.google.com` priority 1 per Workspace docs), plus SPF
+`v=spf1 include:_spf.google.com ~all` and DKIM on `google._domainkey`.
+`hello@stonkz.green` is the public contact.
 
-### 6. X Verified Organizations
+If MX still shows registrar forwarding (`eforward*.registrar-servers.com`), the
+Workspace cutover is incomplete — fix at Namecheap before treating email as done.
 
-Only after: site live on `stonkz.green` over HTTPS, `hello@stonkz.green` receiving mail,
-and `@stonkzgreen` carrying the avatar + dark banner from `assets/`. Review takes
-3–14 business days and reviewers open the profile and the domain in the same sitting, so
-the site must not look under construction.
+### 6. Day-to-day deploys
+
+Edit `public/index.html` (or assets), commit, push to `main`. Render redeploys
+automatically. No CI in this repo.
 
 ---
 
@@ -107,8 +104,8 @@ the site must not look under construction.
 Everything is in `public/index.html` — inline CSS and one inline script, in that order,
 with all helpers declared before `boot()`. Push to `main` and Render redeploys.
 
-Content rules live in the project docs (`05-stonkz-brand-voice-guide.md`). The two that
-bite most often:
+Content rules live in the contracts-repo working docs (`docs/05-brand-voice-guide.md`).
+The two that bite most often:
 
 - **The one-hover rule** — every playful claim ships with its formula one click away
   (`<details>` blocks in the mechanism section). If a line can't be backed, it gets cut.
