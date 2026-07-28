@@ -229,6 +229,14 @@ footer a:hover{color:#fff}
   text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:640px){.tstatus{display:none}}
 </style>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-25H4RJS83Z"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-25H4RJS83Z');
+</script>
 </head>
 <body>
 <a class="skip" href="#main">skip to content</a>
@@ -804,6 +812,47 @@ RESPONSIBLE DISCLOSURE
   } else {
     boot();
   }
+})();
+</script>
+<script>
+/* GA4 custom events. Delegated so nothing depends on element order, and
+   wrapped so a blocked/absent gtag can never throw into the page. */
+(function(){
+  "use strict";
+  function ev(name, params){
+    try { if (typeof window.gtag === 'function') window.gtag('event', name, params || {}); }
+    catch(e){}
+  }
+
+  document.addEventListener('click', function(e){
+    var a = e.target && e.target.closest ? e.target.closest('a') : null;
+    if(!a) return;
+    var href = a.getAttribute('href') || '';
+    if(href.indexOf('mailto:') === 0){
+      ev('email_click', { link_url: href, link_text: (a.textContent || '').trim().slice(0,60) });
+    } else if(href.indexOf('x.com/stonkzgreen') !== -1){
+      ev('x_click', { link_url: href, link_text: (a.textContent || '').trim().slice(0,60) });
+    }
+  }, true);
+
+  /* the signal that matters: does anyone actually open the maths? */
+  var ds = document.querySelectorAll('details');
+  for(var i = 0; i < ds.length; i++){
+    (function(d){
+      d.addEventListener('toggle', function(){
+        if(!d.open) return;
+        var li = d.closest('li');
+        var b  = li ? li.querySelector('b') : null;
+        ev('formula_open', { formula: b ? (b.textContent || '').trim().slice(0,60) : 'unknown' });
+      });
+    })(ds[i]);
+  }
+
+  /* motion toggle usage — tells us whether the default is fighting anyone */
+  var mb = document.getElementById('motionBtn');
+  if(mb) mb.addEventListener('click', function(){
+    ev('motion_toggle', { state: document.documentElement.classList.contains('no-motion') ? 'off' : 'on' });
+  });
 })();
 </script>
 </body>

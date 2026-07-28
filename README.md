@@ -126,8 +126,12 @@ face of the panel. If it ever becomes real data, the label changes in the same c
   trade for a branded error page; swap the route to a `redirect` to `/` if it ever matters.
 - **CSP allows `'unsafe-inline'`** because the site is deliberately one file with inline
   CSS and one inline script. If the site ever grows external JS, move to hashes.
-- **Google Fonts** are the only third-party request the page makes. `connect-src 'self'`
-  means no analytics, no trackers, no beacons — deliberate.
+- **Analytics**: Google Analytics 4 (`G-25H4RJS83Z`). The CSP allows googletagmanager
+  and google-analytics origins for exactly this. Custom events: `email_click`,
+  `x_click`, `formula_open` (did they open the maths?), `motion_toggle`.
+- **Link tagging**: every link posted to X carries
+  `?utm_source=x&utm_medium=social&utm_campaign=<slug>`. t.co wrapping and the X
+  mobile apps strip referrers, so untagged links land in Direct and are unattributable.
 - **Cache headers** treat `/assets/*` as immutable for a year. If an asset changes,
   change its filename.
 - **Motion policy (human ruling).** Motion runs by default for **everyone**,
