@@ -221,6 +221,11 @@ export const expressFactoryAbi = [
   },
 ] as const
 
+export const expressListedEvent = expressFactoryAbi.find(
+  (x): x is Extract<(typeof expressFactoryAbi)[number], { type: 'event'; name: 'ExpressListed' }> =>
+    x.type === 'event' && x.name === 'ExpressListed',
+)!
+
 export type ListingParams = {
   startMcap: bigint
   totalSupply: bigint

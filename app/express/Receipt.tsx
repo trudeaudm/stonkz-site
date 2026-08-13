@@ -66,9 +66,14 @@ export function Receipt({
         </p>
         <div className="rule" />
         <p className="hint">tx {data.txHash}</p>
-        <button type="button" className="btn95" onClick={onReset}>
-          file another
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="btn95" onClick={onReset}>
+            file another
+          </button>
+          <a className="btn95" href={`#/l/${data.listing}`}>
+            open detail
+          </a>
+        </div>
       </div>
     </div>
   )

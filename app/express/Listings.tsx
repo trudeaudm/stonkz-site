@@ -1,0 +1,153 @@
+import { useEffect, useMemo, useState } from 'react'
+import { formatEther, getAddress, type Address } from 'viem'
+import { usePublicClient } from 'wagmi'
+import { env } from '../config/env'
+import { scanExpressListings } from '../indexer/scanner'
+import { loadEnvelope } from '../indexer/storage'
+import type { IndexedListing, ScanProgress } from '../indexer/types'
+
+function short(addr: string) {
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
+}
+
+function tierLabel(startMcap: string): string {
+  const v = BigInt(startMcap)
+  if (v === 4000n * 10n ** 18n) return '$4K'
+  if (v === 8000n * 10n ** 18n) return '$8K'
+  return `${formatEther(v)} mcap`
+}
+
+export function Listings({
+  onOpen,
+}: {
+  onOpen: (listing: Address) => void
+}) {
+  const client = usePublicClient()
+  const factory = env.addrExpressFactory
+  const [view, setView] = useState<'list' | 'icons'>('list')
+  const [listings, setListings] = useState<IndexedListing[]>([])
+  const [progress, setProgress] = useState<ScanProgress | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!factory || !client) return
+    const cached = loadEnvelope(env.chainId, factory)
+    if (cached) setListings(cached.listings)
+
+    const ac = new AbortController()
+    void (async () => {
+      try {
+        const { envelope, progress: p } = await scanExpressListings(client, factory, {
+          signal: ac.signal,
+          onProgress: setProgress,
+        })
+        setListings(envelope.listings)
+        setProgress(p)
+      } catch (err) {
+        if (ac.signal.aborted) return
+        setError(err instanceof Error ? err.message : String(err))
+      }
+    })()
+    return () => ac.abort()
+  }, [client, factory])
+
+  const rows = useMemo(
+    () =>
+      [...listings].sort((a, b) => {
+        const d = BigInt(b.blockNumber) - BigInt(a.blockNumber)
+        return d === 0n ? b.logIndex - a.logIndex : d > 0n ? 1 : -1
+      }),
+    [listings],
+  )
+
+  return (
+    <div className="win listings">
+      <div className="tb">
+        stonkz_listings.exe
+        <span className="sp" />
+        <button type="button" className="xbtn" onClick={() => setView('list')}>
+          ≡
+        </button>
+        <button type="button" className="xbtn" onClick={() => setView('icons')}>
+          ▦
+        </button>
+      </div>
+      <div className="body95">
+        {progress && (
+          <p className="status">
+            {progress.status === 'scanning'
+              ? `scanning block ${progress.cursor.toString()} of ${progress.head.toString()} (${progress.percent.toFixed(1)}%, chunk ${progress.chunkSize})`
+              : progress.message}
+          </p>
+        )}
+        {error && <p className="check bad">{error}</p>}
+        {!factory && <p className="check bad">VITE_ADDR_EXPRESS_FACTORY unset</p>}
+
+        {progress?.status === 'done' && rows.length === 0 && (
+          <p>no launches yet. the gate is closed — soft launch.</p>
+        )}
+
+        {view === 'list' ? (
+          <table className="file-table">
+            <thead>
+              <tr>
+                <th>token</th>
+                <th>creator</th>
+                <th>tier</th>
+                <th>lock</th>
+                <th>side</th>
+                <th>block</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((L) => (
+                <tr
+                  key={L.listing}
+                  onClick={() => onOpen(getAddress(L.listing))}
+                >
+                  <td>
+                    {L.symbol} <span className="hint">{L.name}</span>
+                  </td>
+                  <td>{short(L.creator)}</td>
+                  <td>
+                    <span className="badge">{tierLabel(L.startMcap)}</span>
+                  </td>
+                  <td>
+                    <span className="badge">
+                      {L.liquidityLocked ? 'locked forever' : 'unlockable'}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="badge">
+                      {L.createSidePool
+                        ? L.sidePoolDeployed
+                          ? `side ${L.sidePoolBps}bps`
+                          : `side pending ${L.sidePoolBps}bps`
+                        : 'no side'}
+                    </span>
+                  </td>
+                  <td>{L.blockNumber}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div className="icon-grid">
+            {rows.map((L) => (
+              <button
+                key={L.listing}
+                type="button"
+                className="icon-tile"
+                onClick={() => onOpen(getAddress(L.listing))}
+              >
+                <div className="icon-face">{L.symbol.slice(0, 4)}</div>
+                <div>{L.symbol}</div>
+                <div className="hint">{tierLabel(L.startMcap)}</div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

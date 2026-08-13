@@ -39,6 +39,13 @@ export const directListingAbi = [
   },
   {
     type: 'function',
+    name: 'totalSupply',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
     name: 'startPriceWad',
     stateMutability: 'view',
     inputs: [],

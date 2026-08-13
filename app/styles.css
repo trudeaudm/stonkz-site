@@ -239,3 +239,106 @@ body {
   color: #0A3FA8;
   word-break: break-all;
 }
+
+.taskbar {
+  display: flex;
+  gap: 6px;
+  background: var(--w95);
+  border: 2px solid;
+  border-color: var(--w95l) var(--w95d) var(--w95d) var(--w95l);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, .35);
+  padding: 6px 8px;
+  max-width: 520px;
+  width: 100%;
+}
+
+.tb-btn {
+  background: var(--w95);
+  border: 2px solid;
+  border-color: var(--w95l) var(--w95dd) var(--w95dd) var(--w95l);
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.tb-btn.on {
+  border-color: var(--w95dd) var(--w95l) var(--w95l) var(--w95dd);
+  background: #b7c8f0;
+}
+
+.tb .sp { flex: 1 }
+.xbtn {
+  width: 17px;
+  height: 15px;
+  background: var(--w95);
+  border: 2px solid;
+  border-color: var(--w95l) var(--w95dd) var(--w95dd) var(--w95l);
+  color: #000;
+  font-size: 10px;
+  line-height: 11px;
+  text-align: center;
+  font-weight: 700;
+  padding: 0;
+  cursor: pointer;
+}
+
+.win.listings { max-width: 720px }
+
+.file-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+}
+
+.file-table th,
+.file-table td {
+  border: 1px solid var(--w95d);
+  padding: 4px 6px;
+  text-align: left;
+}
+
+.file-table tbody tr {
+  cursor: pointer;
+  background: #fff;
+}
+
+.file-table tbody tr:hover { background: #e8f0ff }
+
+.badge {
+  display: inline-block;
+  background: #fff;
+  border: 1px solid #000;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+}
+
+.icon-tile {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  text-align: center;
+}
+
+.icon-face {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 6px;
+  background: var(--crt);
+  color: var(--phos);
+  border: 2px solid #000;
+  display: grid;
+  place-items: center;
+  font-family: Silkscreen, 'IBM Plex Mono', monospace;
+  font-size: 10px;
+}
