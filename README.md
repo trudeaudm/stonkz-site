@@ -140,3 +140,30 @@ face of the panel. If it ever becomes real data, the label changes in the same c
   access is try-guarded so private/blocked storage degrades to session-only.
   What motion covers: arrow bob, ticker scroll, price flash, ladder tick.
   Nothing is motion-only — the CRT readout carries the same numbers either way.
+
+---
+
+## app (staging)
+
+Vite + React + wagmi/viem app under `app/`. Built to `dist/app/` and served at `/app/`.
+
+### Dev quickstart
+
+```bash
+nvm use
+npm ci
+cp .env.example .env.local
+npm run dev
+```
+
+Open http://localhost:5173/app/.
+
+### Env-config rule
+
+Contract addresses, chain id, and RPC/explorer URLs are **never constants in source**. They are read from `VITE_*` env vars in `app/config/env.ts`. A redeploy is a config change here, never a code change. Copy `.env.example` → `.env.local` for local work; production/staging values live in the host env.
+
+### Branch model
+
+- **`staging`** — permanent feature environment (this app + future product work).
+- **`main`** — production marketing site.
+- **Promotion** — merge `staging` → `main`. Do not develop on `main`.

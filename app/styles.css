@@ -1,0 +1,72 @@
+:root {
+  --sky1: #3D5AC8;
+  --sky2: #7A4FC0;
+  --sky3: #B0619F;
+  --w95: #C6C6C6;
+  --w95d: #7D7D7D;
+  --w95l: #FFFFFF;
+  --w95dd: #3A3A3A;
+  --navy: #000A6B;
+  --tbblue: #1E90FF;
+  --ink: #101018;
+  --crt: #071410;
+  --crt2: #0A1A14;
+  --crtgrid: rgba(29, 185, 84, .13);
+  --phos: #35F08A;
+  --phosdim: #1DB954;
+  --phosdeep: #0E5F33;
+  --green: #1DB954;
+  --red: #E5484D;
+  --amber: #E8A020;
+  --gold: #FFE3A1;
+}
+
+* { box-sizing: border-box }
+html, body { margin: 0; padding: 0 }
+body {
+  font-family: Rubik, system-ui, -apple-system, sans-serif;
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--sky1), var(--sky2) 58%, var(--sky3));
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+.app {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.win {
+  background: var(--w95);
+  border: 2px solid;
+  border-color: var(--w95l) var(--w95d) var(--w95d) var(--w95l);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, .35);
+  max-width: 420px;
+  width: 100%;
+}
+
+.tb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 5px;
+  background: linear-gradient(90deg, var(--navy), var(--tbblue));
+  color: #fff;
+  font-weight: 700;
+  font-size: 12.5px;
+  font-family: 'IBM Plex Mono', monospace;
+  letter-spacing: .02em;
+  user-select: none;
+}
+
+.body95 {
+  padding: 14px;
+}
+
+.body95 p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
