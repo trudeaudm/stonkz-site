@@ -21,6 +21,7 @@
   "homepage": "https://github.com/trudeaudm/stonkz-site#readme",
   "dependencies": {
     "@tanstack/react-query": "^5.101.4",
+    "hash-wasm": "^4.12.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "viem": "^2.55.15",

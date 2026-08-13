@@ -36,9 +36,9 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 14px;
-  padding: 24px;
+  padding: 28px 24px 48px;
 }
 
 .win {
@@ -138,4 +138,104 @@ body {
 .chain-banner .hint {
   flex-basis: 100%;
   margin: 0;
+}
+
+.win.launch-form,
+.win.launch-status,
+.win.receipt {
+  max-width: 520px;
+}
+
+.launch {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 520px;
+}
+
+.launch-form label,
+.launch-form fieldset {
+  display: block;
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.launch-form input[type="text"],
+.launch-form input[type="number"],
+.launch-form input:not([type]) {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 2px solid;
+  border-color: var(--w95d) var(--w95l) var(--w95l) var(--w95d);
+  background: #fff;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+}
+
+.launch-form fieldset {
+  border: 2px solid;
+  border-color: var(--w95d) var(--w95l) var(--w95l) var(--w95d);
+  padding: 8px 10px;
+}
+
+.launch-form legend {
+  padding: 0 4px;
+  font-weight: 700;
+}
+
+.launch-form .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.launch-form .hint {
+  display: block;
+  margin-top: 4px;
+}
+
+.check {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  margin: 0 0 6px !important;
+}
+
+.check.ok { color: var(--phosdeep); }
+.check.bad { color: var(--red); }
+
+.btn95.go { background: #B7F0C6; margin-top: 4px; }
+
+.pipeline {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 2px solid var(--w95d);
+}
+
+.disabled-surface {
+  opacity: .72;
+}
+
+.eyebrow {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--w95dd);
+}
+
+.rule {
+  height: 2px;
+  background: var(--w95d);
+  border-bottom: 1px solid var(--w95l);
+  margin: 13px 0;
+}
+
+.receipt a {
+  color: #0A3FA8;
+  word-break: break-all;
 }
