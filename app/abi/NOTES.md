@@ -305,3 +305,122 @@ Listing constructor is also `payable` (`StonkzDirectListing.sol:158`) and has
 carry value** — an ETH settle buffer. Fork tests use `ETH_LIST_BUFFER = 1 ether`
 (`contracts/test/ForkCanonPhase4.t.sol:130`). Adapter refunds unused dust.
 Mock-PM unit tests often call `list` with 0 value; real PM needs the buffer.
+
+---
+
+## 0j. ETH buffer lifecycle
+
+⚠ STUCK-BUFFER — excess settle buffer above what the real PM consumes is returned
+to the **listing** contract and has **no recovery path** at HEAD. Flag for the
+contracts repo (not a site fix).
+
+### 0a. Trace (real PoolManager / V4Adapter path)
+
+**1. Value enters the listing.** Factory forwards full `msg.value`:
+
+```146:148:contracts/src/StonkzExpressFactory.sol
+        listing = new StonkzDirectListing{salt: salt, value: msg.value}(
+            poolManager, feeLocker, hook, accumulator, ctoGovernor, pairToken, sideTokenRef, p
+        );
+```
+
+**2. During main-pool construction the listing forwards its entire ETH balance
+to the adapter** (native pair only):
+
+```269:280:contracts/src/StonkzDirectListing.sol
+        // Native pair: forward ETH for any amount0 settle dust (real PM); adapter refunds remainder.
+        uint256 ethVal = pairToken == address(0) ? address(this).balance : 0;
+        poolManager.modifyLiquidity{value: ethVal}(
+            mainPoolKey,
+            IPoolManager.ModifyLiquidityParams({
+                tickLower: lowerTick,
+                tickUpper: topTick,
+                liquidityDelta: int256(uint256(liq)),
+                salt: salt
+            }),
+            ""
+        );
+```
+
+Who is paid / how much consumed: `V4Adapter.modifyLiquidity` unlocks the
+canonical PM with `payer: msg.sender` (= the listing). Negative delta currencies
+are settled from that payer (`_settleDelta`); for a single-sided **token** range
+above spot, ETH debt is typically dust/zero — any ETH that was sent rides on the
+adapter until refund.
+
+```114:141:contracts/src/v4/V4Adapter.sol
+    function modifyLiquidity(PoolKey memory key, ModifyLiquidityParams memory params, bytes calldata hookData)
+        external
+        payable
+        returns (BalanceDelta callerDelta, BalanceDelta feesAccrued)
+    {
+        bytes memory raw = manager.unlock(
+            abi.encode(
+                ModCallback({
+                    action: Action.ModifyLiquidity,
+                    payer: msg.sender,
+                    ...
+                })
+            )
+        );
+        ...
+        _refundDustEth(msg.sender);
+    }
+```
+
+```392:399:contracts/src/v4/V4Adapter.sol
+    function _settleDelta(CanonPoolKey memory ckey, CanonDelta delta, address payer) internal {
+        int128 d0 = delta.amount0();
+        int128 d1 = delta.amount1();
+        if (d0 < 0) ckey.currency0.settle(manager, payer, uint256(uint128(-d0)), false);
+        if (d1 < 0) ckey.currency1.settle(manager, payer, uint256(uint128(-d1)), false);
+        if (d0 > 0) ckey.currency0.take(manager, payer, uint256(uint128(d0)), false);
+        if (d1 > 0) ckey.currency1.take(manager, payer, uint256(uint128(d1)), false);
+    }
+```
+
+**3. "Adapter refunds dust" — to the listing (tx caller of modifyLiquidity), not
+the EOA / factory:**
+
+```411:417:contracts/src/v4/V4Adapter.sol
+    function _refundDustEth(address to) internal {
+        uint256 bal = address(this).balance;
+        if (bal > 0) {
+            (bool ok,) = to.call{value: bal}("");
+            require(ok, "eth refund");
+        }
+    }
+```
+
+`to` = `msg.sender` of `modifyLiquidity` = **the listing**. Transfer is
+`to.call{value: bal}("")` of the adapter's full remaining ETH balance.
+
+**4. Listing can receive the refund; no ETH recovery function exists.**
+
+```147:147:contracts/src/StonkzDirectListing.sol
+    receive() external payable {}
+```
+
+`withdrawMainLiquidity` / `withdrawSideLiquidity` / `claimCreatorReserve` move
+LP principal or creatorReserve **tokens** only — no ETH `call{value}` /
+`transfer` out of the listing at HEAD.
+
+**Conclusion:** excess buffer above PM consumption is returned to the **listing**
+and is **STUCK** on the listing (not recoverable).
+
+The trace does **not** yield a smaller sufficient buffer than the fork default
+(1 ETH). Keep `VITE_LIST_ETH_BUFFER` default `"1"` and state the stuck fact in UI.
+
+### 0b. Step-6 `useLaunch` value audit (as built)
+
+Yes — both simulate and write attached value for the ETH-pair path, hardcoded
+to `ETH_LIST_BUFFER = 10n ** 18n` from `app/mining/create2.ts`:
+
+```ts
+// app/express/useLaunch.ts (step 6)
+const value = pairToken === zeroAddress ? ETH_LIST_BUFFER : 0n
+// … simulateContract({ … value })
+// … writeContractAsync({ … value })
+```
+
+Post-0j: value comes from `parseEther(env.listEthBuffer)` instead of the constant.

@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import {
   decodeEventLog,
+  parseEther,
   zeroAddress,
   type Address,
   type Hex,
@@ -17,11 +18,14 @@ import {
 } from '../abi/expressFactory'
 import { env } from '../config/env'
 import {
-  ETH_LIST_BUFFER,
   matchesVanityPrefix,
   predictListingAddressLocal,
 } from '../mining/create2'
 import { mineVanitySalt } from '../mining/mineVanity'
+
+export function listEthBufferWei(): bigint {
+  return parseEther(env.listEthBuffer)
+}
 
 export type PipelineStep =
   | 'idle'
@@ -201,7 +205,7 @@ export function useLaunch() {
           abi: expressFactoryAbi,
           functionName: 'pairToken',
         })
-        const value = pairToken === zeroAddress ? ETH_LIST_BUFFER : 0n
+        const value = pairToken === zeroAddress ? listEthBufferWei() : 0n
 
         try {
           await publicClient.simulateContract({

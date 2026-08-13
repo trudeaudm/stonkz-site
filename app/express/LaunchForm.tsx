@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
-import { formatEther, zeroAddress, type Address } from 'viem'
-import { useAccount, useReadContract, useReadContracts } from 'wagmi'
+import { formatEther, parseEther, zeroAddress, type Address } from 'viem'
+import { useAccount, useBalance, useReadContract, useReadContracts } from 'wagmi'
 import { expressFactoryAbi, type ListingParams } from '../abi/expressFactory'
 import { env } from '../config/env'
 import { useOnCorrectChain } from '../gate/ChainGuard'
 import { utf8DeclaredUse } from '../mining/create2'
 import { Receipt } from './Receipt'
-import { useLaunch } from './useLaunch'
+import { listEthBufferWei, useLaunch } from './useLaunch'
 
 const TIER_4K = 4000n * 10n ** 18n
 const TIER_8K = 8000n * 10n ** 18n
 const DEFAULT_SUPPLY = 1_000_000n * 10n ** 18n
 const SIDE_POOL_BPS_MAX = 2000
 const CREATOR_RESERVE_BPS_MAX = 10_000 // NOTES.md 0h — bps of total supply; no named on-chain max
+/** Gas headroom for balance precheck (not a fee quote). */
+const GAS_HEADROOM_WEI = parseEther('0.02')
 
 function factory(): Address | undefined {
   return env.addrExpressFactory
@@ -25,6 +27,9 @@ export function LaunchForm() {
   const onCorrectChain = useOnCorrectChain()
   const factoryAddr = factory()
   const launch = useLaunch()
+  const balance = useBalance({ address, query: { enabled: Boolean(address) } })
+  const bufferWei = listEthBufferWei()
+  const bufferEth = env.listEthBuffer
 
   const [name, setName] = useState('STONK')
   const [symbol, setSymbol] = useState('STNK')
@@ -200,6 +205,19 @@ export function LaunchForm() {
       })
     }
 
+    if (pairToken === zeroAddress) {
+      const need = bufferWei + GAS_HEADROOM_WEI
+      const bal = balance.data?.value
+      const funded = bal !== undefined && bal >= need
+      list.push({
+        ok: funded,
+        label: 'ethBufferBalance',
+        detail: funded
+          ? `balance covers ${bufferEth} ETH buffer + gas headroom`
+          : `need ≥ ${bufferEth} ETH buffer + ${formatEther(GAS_HEADROOM_WEI)} ETH gas headroom (have ${bal !== undefined ? formatEther(bal) : '—'})`,
+      })
+    }
+
     return list
   }, [
     deploysEnabled,
@@ -210,6 +228,9 @@ export function LaunchForm() {
     createSidePool,
     sideTokenRef,
     refConfigured.data,
+    bufferWei,
+    bufferEth,
+    balance.data?.value,
   ])
 
   const allGreen = checks.every((c) => c.ok)
@@ -427,6 +448,20 @@ export function LaunchForm() {
               init-code hash.
             </span>
           </label>
+
+          {pairToken === zeroAddress && (
+            <div className="pipeline">
+              <p>
+                this launch sends {bufferEth} ETH as a settle buffer
+              </p>
+              <p className="hint">
+                excess is not recoverable — adapter refunds unused ETH to the
+                listing contract; the listing has no ETH withdrawal path
+                (NOTES.md 0j). default buffer stays {bufferEth} ETH (fork
+                tests); the trace does not yield a smaller sufficient amount.
+              </p>
+            </div>
+          )}
 
           <button
             type="button"
