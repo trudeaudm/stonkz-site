@@ -22,14 +22,15 @@
 }
 
 * { box-sizing: border-box }
-html, body { margin: 0; padding: 0; height: 100% }
+html, body { margin: 0; padding: 0; min-height: 100% }
 body {
   font-family: Rubik, system-ui, -apple-system, sans-serif;
   color: var(--ink);
   background: linear-gradient(180deg, var(--sky1), var(--sky2) 58%, var(--sky3));
   background-attachment: fixed;
   min-height: 100%;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .mono { font-family: 'IBM Plex Mono', monospace }
@@ -37,10 +38,9 @@ body {
 
 .app.mw-app {
   min-height: 100vh;
-  height: 100vh;
   padding: 0;
   display: block;
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* ---- scenery ---- */
@@ -76,6 +76,205 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .bob, .bob2 { animation: none }
   .helth i:after { animation: none }
+  .tape-track { animation: none }
+}
+
+/* ---- market page ---- */
+.market-page {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  padding-bottom: 48px;
+}
+.market-wrap {
+  position: relative;
+  z-index: 2;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 18px 16px 40px;
+}
+.mkt-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.logo-lockup { text-decoration: none; color: inherit }
+.logo-impact {
+  font-family: Impact, 'Arial Black', sans-serif;
+  font-size: clamp(34px, 7vw, 64px);
+  color: #fff;
+  -webkit-text-stroke: 2.5px #000;
+  paint-order: stroke fill;
+  text-shadow: 4px 4px 0 #000;
+  letter-spacing: .04em;
+  transform: rotate(-2deg);
+  line-height: 1;
+}
+.logo-stickers { display: flex; flex-direction: column; gap: 6px }
+.tagline {
+  background: #fff;
+  border: 2px solid #000;
+  box-shadow: 3px 3px 0 #000;
+  padding: 5px 11px;
+  font-weight: 700;
+  font-size: 11.5px;
+  transform: rotate(1.5deg);
+  width: fit-content;
+}
+.tagline-2 { transform: rotate(-1deg) }
+.topnav {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.header-chip { cursor: pointer }
+.header-hint { flex-basis: 100%; margin: 0 }
+
+.tape {
+  overflow: hidden;
+  background: var(--crt);
+  border: 2px solid #000;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, .35);
+  margin-bottom: 16px;
+}
+.tape-track {
+  display: flex;
+  gap: 34px;
+  white-space: nowrap;
+  padding: 8px 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--phos);
+  animation: tape-scroll 40s linear infinite;
+  width: max-content;
+}
+.tape-item { flex: none }
+@keyframes tape-scroll {
+  from { transform: translateX(0) }
+  to { transform: translateX(-50%) }
+}
+
+.hero-caption {
+  font-family: Impact, 'Arial Black', sans-serif;
+  font-size: clamp(18px, 3.4vw, 28px);
+  text-align: left;
+  color: #fff;
+  -webkit-text-stroke: 1.2px #000;
+  paint-order: stroke fill;
+  text-shadow: 2px 2px 0 #000;
+  margin: 2px 0 12px;
+  line-height: 1.25;
+}
+.hero-footnote {
+  font-size: 12px;
+  -webkit-text-stroke: .8px #000;
+  display: inline-block;
+  margin-top: 4px;
+}
+
+.logrow { margin-bottom: 16px }
+.activity-dock { width: 100%; max-width: none }
+.feed95-btn {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.feed95 {
+  height: 26px;
+  overflow: hidden;
+  background: #fff;
+  border: 2px solid;
+  border-color: var(--w95d) var(--w95l) var(--w95l) var(--w95d);
+  padding: 4px 10px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--ink);
+  line-height: 18px;
+}
+.dock-expand { margin-top: 8px; max-height: 220px }
+
+.static-win {
+  background: var(--w95);
+  border: 2px solid;
+  border-color: var(--w95l) var(--w95d) var(--w95d) var(--w95l);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, .35);
+  margin-bottom: 16px;
+}
+.static-win .mw-title { cursor: default }
+.genesis-slot { width: 100% }
+.genesis-status { margin-top: 10px !important }
+
+.coinrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.coinic {
+  width: 42px;
+  height: 42px;
+  background: #fff;
+  border: 2px solid #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 21px;
+  flex: none;
+  box-shadow: 2px 2px 0 #000;
+  font-family: Impact, 'Arial Black', sans-serif;
+}
+.grow { flex: 1; min-width: 0 }
+.tk { font-weight: 700; font-size: 15px }
+.nm { font-size: 11.5px; color: #4A4A56 }
+
+.section-caption {
+  font-family: Impact, 'Arial Black', sans-serif;
+  text-align: center;
+  font-size: 20px;
+  color: #fff;
+  -webkit-text-stroke: 1.2px #000;
+  paint-order: stroke fill;
+  text-shadow: 2px 2px 0 #000;
+  margin: 18px 0 10px;
+}
+.mkt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+.token-card { margin-bottom: 0 }
+.card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+.empty-card p { margin: 0; font-size: 13.5px; line-height: 1.6 }
+
+.stamp-genesis { background: #FFD87A; color: #7A4E00 }
+
+.overlay-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+}
+.overlay-stage > * ,
+.overlay-stage .mw-win {
+  pointer-events: auto;
+}
+.overlay-stage .chain-banner {
+  pointer-events: auto;
+}
+.overlay-stage .mw-win {
+  /* keep absolute from Window.tsx */
 }
 
 /* ---- boot / gate ---- */
@@ -97,7 +296,7 @@ body {
 .desktop-fade {
   opacity: 0;
   transition: opacity .45s ease;
-  height: 100%;
+  min-height: 100%;
 }
 .desktop-fade.in { opacity: 1 }
 @media (prefers-reduced-motion: reduce) {

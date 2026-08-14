@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getAddress, isAddress, type Address } from 'viem'
-import { useAccount } from 'wagmi'
 import { LaunchHost } from './express/LaunchForm'
-import { MarketWindow } from './express/Listings'
 import { TokenWindow } from './express/ListingDetail'
 import { ChainGuard } from './gate/ChainGuard'
 import { GateScreen } from './gate/GateScreen'
+import { ActivityLogDock } from './market/ActivityLogDock'
+import { GenesisSlot } from './market/GenesisSlot'
+import { HeroHeadline } from './market/HeroHeadline'
+import { MarketGrid } from './market/MarketGrid'
+import { MarketHeader } from './market/MarketHeader'
+import { TickerTape } from './market/TickerTape'
 import { AccountWindow } from './shell/AccountWindow'
-import { ActivityLogWindow } from './shell/ActivityLog'
-import { DeskIcon } from './shell/DeskIcon'
 import { IndexProvider } from './shell/IndexProvider'
+import { MyStuffWindow } from './shell/MyStuffWindow'
 import { Scenery } from './shell/Scenery'
-import { StartMenu, Taskbar } from './shell/Taskbar'
 import { ToastProvider } from './shell/Toast'
 import {
   WindowManagerProvider,
@@ -22,14 +24,15 @@ import {
 type Route =
   | { name: 'home' }
   | { name: 'launch' }
-  | { name: 'listings' }
+  | { name: 'me' }
   | { name: 'detail'; listing: Address }
 
 function parseHash(): Route {
   const raw = window.location.hash.replace(/^#\/?/, '')
   const parts = raw.split('/').filter(Boolean)
   if (parts[0] === 'launch') return { name: 'launch' }
-  if (parts[0] === 'listings') return { name: 'listings' }
+  if (parts[0] === 'me') return { name: 'me' }
+  if (parts[0] === 'listings') return { name: 'home' }
   if (parts[0] === 'l' && parts[1] && isAddress(parts[1])) {
     return { name: 'detail', listing: getAddress(parts[1]) }
   }
@@ -39,35 +42,49 @@ function parseHash(): Route {
 function navigate(route: Route) {
   if (route.name === 'home') window.location.hash = '#/'
   else if (route.name === 'launch') window.location.hash = '#/launch'
-  else if (route.name === 'listings') window.location.hash = '#/listings'
+  else if (route.name === 'me') window.location.hash = '#/me'
   else window.location.hash = `#/l/${route.listing}`
 }
 
-function DesktopShell() {
-  const { address } = useAccount()
+function MarketPage() {
   const { open, close, isOpen, windows } = useWindowManager()
   const [route, setRoute] = useState<Route>(() =>
     typeof window === 'undefined' ? { name: 'home' } : parseHash(),
   )
-  const [startOpen, setStartOpen] = useState(false)
   const [tokenListing, setTokenListing] = useState<Address | null>(null)
 
   const syncFromRoute = useCallback(
     (r: Route) => {
+      if (r.name !== 'launch') {
+        close('make_coin')
+        close('precheck')
+      }
+      if (r.name !== 'me') close('my_stuff')
+
       if (r.name === 'launch') {
         open('make_coin', 'make_coin.exe')
         open('precheck', 'precheck.exe')
-      } else if (r.name === 'listings') {
-        open('the_market', 'the_market.exe')
+        setTokenListing((prev) => {
+          if (prev) close(`token:${prev}` as WinId)
+          return null
+        })
+      } else if (r.name === 'me') {
+        open('my_stuff', 'my_stuff.exe')
+        setTokenListing((prev) => {
+          if (prev) close(`token:${prev}` as WinId)
+          return null
+        })
       } else if (r.name === 'detail') {
         setTokenListing(r.listing)
-        open(
-          `token:${r.listing}` as WinId,
-          'token.exe',
-        )
+        open(`token:${r.listing}` as WinId, 'token.exe')
+      } else {
+        setTokenListing((prev) => {
+          if (prev) close(`token:${prev}` as WinId)
+          return null
+        })
       }
     },
-    [open],
+    [open, close],
   )
 
   useEffect(() => {
@@ -85,16 +102,15 @@ function DesktopShell() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [syncFromRoute])
 
-  // Close hash-backed window → #/
   useEffect(() => {
-    if (route.name === 'launch' && !isOpen('make_coin') && !isOpen('precheck')) {
-      if (window.location.hash !== '#/' && window.location.hash !== '') {
+    if (route.name === 'launch' && !isOpen('make_coin') && !isOpen('precheck') && !isOpen('certificate')) {
+      if (window.location.hash.startsWith('#/launch')) {
         navigate({ name: 'home' })
         setRoute({ name: 'home' })
       }
     }
-    if (route.name === 'listings' && !isOpen('the_market')) {
-      if (window.location.hash.startsWith('#/listings')) {
+    if (route.name === 'me' && !isOpen('my_stuff')) {
+      if (window.location.hash.startsWith('#/me')) {
         navigate({ name: 'home' })
         setRoute({ name: 'home' })
       }
@@ -109,23 +125,18 @@ function DesktopShell() {
     }
   }, [windows, route, isOpen, tokenListing])
 
-  const openProgram = useCallback(
-    (id: 'make_coin' | 'the_market' | 'activity_log') => {
-      if (id === 'make_coin') {
-        open('make_coin', 'make_coin.exe')
-        open('precheck', 'precheck.exe')
-        navigate({ name: 'launch' })
-        setRoute({ name: 'launch' })
-      } else if (id === 'the_market') {
-        open('the_market', 'the_market.exe')
-        navigate({ name: 'listings' })
-        setRoute({ name: 'listings' })
-      } else {
-        open('activity_log', 'activity_log.exe')
-      }
-    },
-    [open],
-  )
+  const goLaunch = useCallback(() => {
+    open('make_coin', 'make_coin.exe')
+    open('precheck', 'precheck.exe')
+    navigate({ name: 'launch' })
+    setRoute({ name: 'launch' })
+  }, [open])
+
+  const goMe = useCallback(() => {
+    open('my_stuff', 'my_stuff.exe')
+    navigate({ name: 'me' })
+    setRoute({ name: 'me' })
+  }, [open])
 
   const openToken = useCallback(
     (listing: Address) => {
@@ -138,55 +149,47 @@ function DesktopShell() {
   )
 
   return (
-    <div className="mw-desktop">
+    <div className="market-page">
       <Scenery />
-      <div className="desk-icons">
-        <DeskIcon
-          label={'make_coin.exe'}
-          glyph="▲"
-          onOpen={() => openProgram('make_coin')}
+      <div className="market-wrap">
+        <MarketHeader
+          onMakeCoin={goLaunch}
+          onMyStuff={goMe}
+          onAccount={() => {
+            if (isOpen('account')) close('account')
+            else open('account', 'account.exe')
+          }}
         />
-        <DeskIcon
-          label={'the_market.exe'}
-          glyph="≡"
-          onOpen={() => openProgram('the_market')}
-        />
-        <DeskIcon
-          label={'activity_log.exe'}
-          glyph="🖥"
-          onOpen={() => openProgram('activity_log')}
-        />
+        <TickerTape />
+        <HeroHeadline />
+        <ActivityLogDock />
+        <GenesisSlot />
+        <MarketGrid onOpen={openToken} />
       </div>
 
-      <div className="mw-stage">
+      <div className="overlay-stage">
         <ChainGuard>
-          {address && (isOpen('make_coin') || isOpen('precheck') || isOpen('certificate')) && (
+          {(isOpen('make_coin') || isOpen('precheck') || isOpen('certificate')) && (
             <LaunchHost
               formOpen={isOpen('make_coin')}
               precheckOpen={isOpen('precheck')}
               onCloseForm={() => {
                 close('make_coin')
-                if (!isOpen('precheck')) {
+                if (!isOpen('precheck') && !isOpen('certificate')) {
                   navigate({ name: 'home' })
                   setRoute({ name: 'home' })
                 }
               }}
               onClosePrecheck={() => close('precheck')}
               onReceiptOpen={() => open('certificate', 'certificate.exe')}
-              onCloseCertificate={() => close('certificate')}
-            />
-          )}
-          {address && isOpen('the_market') && (
-            <MarketWindow
-              onOpen={openToken}
-              onClose={() => {
-                close('the_market')
+              onCloseCertificate={() => {
+                close('certificate')
                 navigate({ name: 'home' })
                 setRoute({ name: 'home' })
               }}
             />
           )}
-          {address && tokenListing && isOpen(`token:${tokenListing}` as WinId) && (
+          {tokenListing && isOpen(`token:${tokenListing}` as WinId) && (
             <TokenWindow
               listing={tokenListing}
               onClose={() => {
@@ -197,24 +200,21 @@ function DesktopShell() {
               }}
             />
           )}
-          {isOpen('activity_log') && (
-            <ActivityLogWindow onClose={() => close('activity_log')} />
+          {isOpen('my_stuff') && (
+            <MyStuffWindow
+              onOpen={openToken}
+              onClose={() => {
+                close('my_stuff')
+                navigate({ name: 'home' })
+                setRoute({ name: 'home' })
+              }}
+            />
           )}
           {isOpen('account') && (
             <AccountWindow onClose={() => close('account')} />
           )}
         </ChainGuard>
       </div>
-
-      <StartMenu
-        open={startOpen}
-        onClose={() => setStartOpen(false)}
-        onOpenProgram={openProgram}
-      />
-      <Taskbar
-        startOpen={startOpen}
-        onToggleStart={() => setStartOpen((s) => !s)}
-      />
     </div>
   )
 }
@@ -226,7 +226,7 @@ export function App() {
         <div className="app mw-app">
           <GateScreen>
             <IndexProvider>
-              <DesktopShell />
+              <MarketPage />
             </IndexProvider>
           </GateScreen>
         </div>

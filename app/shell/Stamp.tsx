@@ -1,4 +1,4 @@
-type StampVariant = 'stonkz' | 'red' | 'amber'
+type StampVariant = 'stonkz' | 'red' | 'amber' | 'genesis'
 
 export function Stamp({
   children,

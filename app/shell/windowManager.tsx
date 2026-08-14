@@ -15,6 +15,7 @@ export type WinId =
   | 'activity_log'
   | 'certificate'
   | 'account'
+  | 'my_stuff'
   | `token:${string}`
 
 export type WinDef = {
@@ -41,12 +42,13 @@ type WindowManagerValue = {
 const Ctx = createContext<WindowManagerValue | null>(null)
 
 const DEFAULT_POS: Record<string, { x: number; y: number }> = {
-  make_coin: { x: 40, y: 36 },
-  precheck: { x: 520, y: 48 },
+  make_coin: { x: 48, y: 72 },
+  precheck: { x: 540, y: 88 },
   the_market: { x: 60, y: 40 },
   activity_log: { x: 80, y: 280 },
-  certificate: { x: 120, y: 60 },
-  account: { x: 200, y: 80 },
+  certificate: { x: 160, y: 80 },
+  account: { x: 280, y: 100 },
+  my_stuff: { x: 100, y: 80 },
 }
 
 export function WindowManagerProvider({ children }: { children: ReactNode }) {
