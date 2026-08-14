@@ -59,18 +59,15 @@ function parseOptionalUint(name: string, fallback: number): number {
   return n
 }
 
-/** Decimal ETH string → must parse as finite > 0 when set; default "1". */
-function parseEthDecimal(name: string, fallback: string): string {
-  const value = read(name) ?? fallback
-  const n = Number(value)
-  if (!Number.isFinite(n) || n <= 0) {
-    throw new Error(`${name} must be a positive decimal ETH amount (got ${JSON.stringify(value)})`)
+/** Positive integer wei string (no decimals, no scientific notation). */
+function parseWeiString(name: string, fallback: string): string {
+  const value = (read(name) ?? fallback).trim()
+  if (!/^[1-9]\d*$/.test(value)) {
+    throw new Error(
+      `${name} must be a positive integer wei string (got ${JSON.stringify(value)})`,
+    )
   }
-  // Reject scientific notation / junk that Number accepts but parseEther may not
-  if (!/^\d+(\.\d+)?$/.test(value.trim())) {
-    throw new Error(`${name} must be a plain decimal string (got ${JSON.stringify(value)})`)
-  }
-  return value.trim()
+  return value
 }
 
 export const env = Object.freeze({
@@ -79,7 +76,8 @@ export const env = Object.freeze({
   explorerUrl: requireHttps('VITE_EXPLORER_URL'),
   betaGate: read('VITE_BETA_GATE') === '1',
   testerAllowlist: parseAllowlist('VITE_TESTER_ALLOWLIST'),
-  listEthBuffer: parseEthDecimal('VITE_LIST_ETH_BUFFER', '1'),
+  /** Decimal wei string for list() settle buffer. */
+  listBufferWei: parseWeiString('VITE_LIST_BUFFER_WEI', '1000000'),
   indexFromBlock: parseOptionalUint('VITE_INDEX_FROM_BLOCK', 0),
   addrV4Adapter: optionalAddress('VITE_ADDR_V4_ADAPTER'),
   addrFeeHook: optionalAddress('VITE_ADDR_FEE_HOOK'),

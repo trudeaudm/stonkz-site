@@ -302,8 +302,10 @@ Listing constructor is also `payable` (`StonkzDirectListing.sol:158`) and has
 `receive() external payable`.
 
 **Form implication:** for ETH pair (`pairToken == address(0)`), the tx **must
-carry value** — an ETH settle buffer. Fork tests use `ETH_LIST_BUFFER = 1 ether`
-(`contracts/test/ForkCanonPhase4.t.sol:130`). Adapter refunds unused dust.
+carry value** — an ETH settle buffer. Fork tests historically used
+`ETH_LIST_BUFFER = 1 ether` (`contracts/test/ForkCanonPhase4.t.sol:130`); site
+default is now `VITE_LIST_BUFFER_WEI=1000000` (measured ~103k–146k wei
+consumption at fork block 35828651). Adapter refunds unused dust to the listing.
 Mock-PM unit tests often call `list` with 0 value; real PM needs the buffer.
 
 ---
@@ -408,19 +410,20 @@ LP principal or creatorReserve **tokens** only — no ETH `call{value}` /
 **Conclusion:** excess buffer above PM consumption is returned to the **listing**
 and is **STUCK** on the listing (not recoverable).
 
-The trace does **not** yield a smaller sufficient buffer than the fork default
-(1 ETH). Keep `VITE_LIST_ETH_BUFFER` default `"1"` and state the stuck fact in UI.
+Measured settle consumption at fork block 35828651: **103160 wei** ($4k tier) /
+**145658 wei** ($8k tier), paid to the canonical PoolManager. Default
+`VITE_LIST_BUFFER_WEI=1000000` (~7–10× margin). Excess above consumption stays
+on the listing — keep the buffer small.
 
 ### 0b. Step-6 `useLaunch` value audit (as built)
 
-Yes — both simulate and write attached value for the ETH-pair path, hardcoded
-to `ETH_LIST_BUFFER = 10n ** 18n` from `app/mining/create2.ts`:
+Yes — both simulate and write attached value for the ETH-pair path. Historically
+hardcoded to `10n ** 18n`, then a decimal-ETH env var. Current:
+`BigInt(env.listBufferWei)` (`VITE_LIST_BUFFER_WEI`, default `"1000000"`).
 
 ```ts
-// app/express/useLaunch.ts (step 6)
-const value = pairToken === zeroAddress ? ETH_LIST_BUFFER : 0n
+// app/express/useLaunch.ts
+const value = pairToken === zeroAddress ? listBufferWei() : 0n
 // … simulateContract({ … value })
 // … writeContractAsync({ … value })
 ```
-
-Post-0j: value comes from `parseEther(env.listEthBuffer)` instead of the constant.

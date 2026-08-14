@@ -18,8 +18,8 @@ import {
 /** NOTES.md 0e — Vanity.PREFIX = 0x4663 (top 2 bytes / 4 nibbles). */
 export const VANITY_PREFIX = '4663'
 
-/** @deprecated use env.listEthBuffer via parseEther — kept only for docs cross-ref in NOTES 0i. */
-export const ETH_LIST_BUFFER_DEFAULT_WEI = 10n ** 18n
+/** Historical fork-test constant (1 ETH) — superseded by env.listBufferWei (1e6 wei). */
+export const ETH_LIST_BUFFER_DEFAULT_WEI = 1_000_000n
 
 /** NOTES.md 0b — keccak256(abi.encode(deployer, userSalt)). */
 export function listingSalt(deployer: Address, userSalt: Hex): Hex {

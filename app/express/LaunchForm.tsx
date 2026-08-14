@@ -10,7 +10,7 @@ import { useToast } from '../shell/Toast'
 import { Win95Window } from '../shell/Window'
 import { useWindowManager } from '../shell/windowManager'
 import { Receipt } from './Receipt'
-import { listEthBufferWei, useLaunch } from './useLaunch'
+import { listBufferWei, useLaunch } from './useLaunch'
 
 const TIER_4K = 4000n * 10n ** 18n
 const TIER_8K = 8000n * 10n ** 18n
@@ -49,8 +49,11 @@ export function LaunchHost({
   const toast = useToast()
   const { open, close: closeWin } = useWindowManager()
   const balance = useBalance({ address, query: { enabled: Boolean(address) } })
-  const bufferWei = listEthBufferWei()
-  const bufferEth = env.listEthBuffer
+  const bufferWei = listBufferWei()
+  const bufferLabel =
+    bufferWei >= 10n ** 12n
+      ? `${bufferWei.toString()} wei (${formatEther(bufferWei)} ETH)`
+      : `${bufferWei.toString()} wei`
 
   const [name, setName] = useState('STONK')
   const [symbol, setSymbol] = useState('STNK')
@@ -234,8 +237,8 @@ export function LaunchHost({
         ok: funded,
         label: 'ethBufferBalance',
         detail: funded
-          ? `balance covers ${bufferEth} ETH buffer + gas headroom`
-          : `need ≥ ${bufferEth} ETH buffer + ${formatEther(GAS_HEADROOM_WEI)} ETH gas headroom (have ${bal !== undefined ? formatEther(bal) : '—'})`,
+          ? `balance covers ${bufferLabel} settle buffer + ${formatEther(GAS_HEADROOM_WEI)} ETH gas headroom`
+          : `need ≥ ${bufferLabel} settle buffer + ${formatEther(GAS_HEADROOM_WEI)} ETH gas headroom (have ${bal !== undefined ? formatEther(bal) : '—'} ETH)`,
       })
     }
 
@@ -250,7 +253,7 @@ export function LaunchHost({
     sideTokenRef,
     refConfigured.data,
     bufferWei,
-    bufferEth,
+    bufferLabel,
     balance.data?.value,
   ])
 
@@ -508,12 +511,14 @@ export function LaunchHost({
 
             {pairToken === zeroAddress && (
               <div className="pipeline">
-                <p>this launch sends {bufferEth} ETH as a settle buffer</p>
+                <p>
+                  this launch sends {bufferWei.toString()} wei as a settle
+                  buffer (goes to the pool manager; measured, not guessed)
+                </p>
                 <p className="hint">
-                  excess is not recoverable — adapter refunds unused ETH to the
-                  listing contract; the listing has no ETH withdrawal path
-                  (NOTES.md 0j). default buffer stays {bufferEth} ETH (fork
-                  tests); the trace does not yield a smaller sufficient amount.
+                  excess above actual consumption stays on the listing contract
+                  — the default carries ~10x margin, so worst-case excess is
+                  less than 1e6 wei.
                 </p>
               </div>
             )}
