@@ -5,6 +5,10 @@ import { expressFactoryAbi, type ListingParams } from '../abi/expressFactory'
 import { env } from '../config/env'
 import { useOnCorrectChain } from '../gate/ChainGuard'
 import { utf8DeclaredUse } from '../mining/create2'
+import { Stamp } from '../shell/Stamp'
+import { useToast } from '../shell/Toast'
+import { Win95Window } from '../shell/Window'
+import { useWindowManager } from '../shell/windowManager'
 import { Receipt } from './Receipt'
 import { listEthBufferWei, useLaunch } from './useLaunch'
 
@@ -22,11 +26,28 @@ function factory(): Address | undefined {
 
 type Check = { ok: boolean; label: string; detail: string }
 
-export function LaunchForm() {
+/** Hosts make_coin.exe + precheck.exe (+ certificate) with shared form state. */
+export function LaunchHost({
+  formOpen,
+  precheckOpen,
+  onCloseForm,
+  onClosePrecheck,
+  onReceiptOpen,
+  onCloseCertificate,
+}: {
+  formOpen: boolean
+  precheckOpen: boolean
+  onCloseForm: () => void
+  onClosePrecheck: () => void
+  onReceiptOpen: () => void
+  onCloseCertificate: () => void
+}) {
   const { address } = useAccount()
   const onCorrectChain = useOnCorrectChain()
   const factoryAddr = factory()
   const launch = useLaunch()
+  const toast = useToast()
+  const { open, close: closeWin } = useWindowManager()
   const balance = useBalance({ address, query: { enabled: Boolean(address) } })
   const bufferWei = listEthBufferWei()
   const bufferEth = env.listEthBuffer
@@ -245,6 +266,31 @@ export function LaunchForm() {
     Boolean(address) &&
     Boolean(factoryAddr)
 
+  useEffect(() => {
+    if (launch.step === 'mine') toast.push('mining vanity salt…', 'info')
+    else if (launch.step === 'simulate') toast.push('simulating list()…', 'info')
+    else if (launch.step === 'write') toast.push('awaiting wallet…', 'info')
+    else if (launch.step === 'receipt') toast.push('waiting for receipt…', 'info')
+    else if (launch.step === 'done') toast.push('listing filed', 'ok')
+    else if (launch.step === 'error' && launch.error) {
+      toast.push(launch.error.slice(0, 80), 'err')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- toast on step edges
+  }, [launch.step])
+
+  useEffect(() => {
+    if (launch.receipt) {
+      open('certificate', 'certificate.exe')
+      onReceiptOpen()
+    }
+  }, [launch.receipt, open, onReceiptOpen])
+
+  useEffect(() => {
+    if (launch.receipt && formOpen) {
+      closeWin('make_coin')
+    }
+  }, [launch.receipt, formOpen, closeWin])
+
   function buildParams(): ListingParams {
     if (!address) throw new Error('no address')
     // Stamped fields: factory overwrites at list/initCodeHash (NOTES.md 0f).
@@ -268,15 +314,20 @@ export function LaunchForm() {
     }
   }
 
-  if (launch.receipt) {
-    return <Receipt data={launch.receipt} onReset={launch.reset} />
-  }
+  const mining = launch.step === 'mine'
+  const attemptMatch = launch.mineStats?.match(/(\d[\d,]*)\s*attempts/i)
+  const attempts = attemptMatch?.[1]
 
   return (
-    <div className="launch">
-      <div className="win launch-status">
-        <div className="tb">stonkz_precheck.exe</div>
-        <div className="body95">
+    <>
+      {precheckOpen && (
+        <Win95Window
+          id="precheck"
+          title="precheck.exe"
+          titleTone="amber"
+          width={320}
+          onClose={onClosePrecheck}
+        >
           {!factoryAddr && (
             <p className="check bad">VITE_ADDR_EXPRESS_FACTORY unset</p>
           )}
@@ -285,203 +336,238 @@ export function LaunchForm() {
           )}
           {checks.map((c) => (
             <p key={c.label} className={c.ok ? 'check ok' : 'check bad'}>
-              {c.ok ? '●' : '●'} {c.detail}
+              ● {c.detail}
             </p>
           ))}
           {!onCorrectChain && (
             <p className="check bad">wrong network — switch before launch</p>
           )}
-        </div>
-      </div>
+        </Win95Window>
+      )}
 
-      <div className={`win launch-form ${!onCorrectChain ? 'disabled-surface' : ''}`}>
-        <div className="tb">stonkz_express.exe</div>
-        <div className="body95">
-          <label>
-            name
-            <input
-              value={name}
-              maxLength={32}
-              onChange={(e) => setName(e.target.value)}
-              disabled={!onCorrectChain}
-            />
-          </label>
-          <label>
-            symbol
-            <input
-              value={symbol}
-              maxLength={12}
-              onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-              disabled={!onCorrectChain}
-            />
-          </label>
-          <label>
-            total supply (tokens)
-            <input
-              value={supplyHuman}
-              onChange={(e) => setSupplyHuman(e.target.value.replace(/[^\d]/g, ''))}
-              disabled={!onCorrectChain}
-            />
-            <span className="hint">
-              raw: {totalSupply.toString()} · human: {formatEther(totalSupply || DEFAULT_SUPPLY)}
-            </span>
-          </label>
-
-          <fieldset disabled={!onCorrectChain}>
-            <legend>start mcap tier</legend>
-            <label className="row">
+      {formOpen && !launch.receipt && (
+        <Win95Window
+          id="make_coin"
+          title="make_coin.exe"
+          width={480}
+          onClose={onCloseForm}
+        >
+          <div className={`launch-form ${!onCorrectChain ? 'disabled-surface' : ''}`}>
+            <label>
+              name
               <input
-                type="radio"
-                checked={tier === '4k'}
-                onChange={() => setTier('4k')}
+                value={name}
+                maxLength={32}
+                onChange={(e) => setName(e.target.value)}
+                disabled={!onCorrectChain}
               />
-              $4,000
-            </label>
-            <label className="row">
-              <input
-                type="radio"
-                checked={tier === '8k'}
-                onChange={() => setTier('8k')}
-              />
-              $8,000
-            </label>
-          </fieldset>
-
-          <label>
-            creator reserve (bps of total supply, 0–10000)
-            <input
-              type="number"
-              min={0}
-              max={CREATOR_RESERVE_BPS_MAX}
-              value={creatorReserveBps}
-              onChange={(e) => setCreatorReserveBps(Number(e.target.value))}
-              disabled={!onCorrectChain}
-            />
-          </label>
-
-          <fieldset disabled={!onCorrectChain}>
-            <legend>delivery</legend>
-            <label className="row">
-              <input
-                type="radio"
-                checked={delivery === 'instant'}
-                onChange={() => setDelivery('instant')}
-              />
-              INSTANT (10-minute timelock before claim)
-            </label>
-            <label className="row">
-              <input
-                type="radio"
-                checked={delivery === 'vest'}
-                onChange={() => setDelivery('vest')}
-              />
-              VEST
-            </label>
-            {delivery === 'vest' && (
-              <label>
-                vest duration (days)
-                <input
-                  type="number"
-                  min={1}
-                  value={vestDays}
-                  onChange={(e) => setVestDays(Number(e.target.value))}
-                />
-              </label>
-            )}
-          </fieldset>
-
-          <fieldset disabled={!onCorrectChain}>
-            <legend>side pool</legend>
-            <p className="hint">
-              factory stamps createSidePool / sidePoolBps / refPrice at list
-              (NOTES.md 0f). defaults loaded from chain; toggles follow those
-              stamped values.
-            </p>
-            <label className="row">
-              <input
-                type="checkbox"
-                checked={createSidePool}
-                onChange={(e) => setCreateSidePool(e.target.checked)}
-              />
-              create side pool
             </label>
             <label>
-              side pool bps (0–2000)
+              symbol
+              <input
+                value={symbol}
+                maxLength={12}
+                onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                disabled={!onCorrectChain}
+              />
+            </label>
+            <label>
+              total supply (tokens)
+              <input
+                value={supplyHuman}
+                onChange={(e) => setSupplyHuman(e.target.value.replace(/[^\d]/g, ''))}
+                disabled={!onCorrectChain}
+              />
+              <span className="hint">
+                raw: {totalSupply.toString()} · human:{' '}
+                {formatEther(totalSupply || DEFAULT_SUPPLY)}
+              </span>
+            </label>
+
+            <fieldset disabled={!onCorrectChain}>
+              <legend>start mcap tier</legend>
+              <label className="row">
+                <input
+                  type="radio"
+                  checked={tier === '4k'}
+                  onChange={() => setTier('4k')}
+                />
+                $4,000
+              </label>
+              <label className="row">
+                <input
+                  type="radio"
+                  checked={tier === '8k'}
+                  onChange={() => setTier('8k')}
+                />
+                $8,000
+              </label>
+            </fieldset>
+
+            <label>
+              creator reserve (bps of total supply, 0–10000)
               <input
                 type="number"
                 min={0}
-                max={SIDE_POOL_BPS_MAX}
-                value={sidePoolBps}
-                onChange={(e) => setSidePoolBps(Number(e.target.value))}
+                max={CREATOR_RESERVE_BPS_MAX}
+                value={creatorReserveBps}
+                onChange={(e) => setCreatorReserveBps(Number(e.target.value))}
+                disabled={!onCorrectChain}
               />
             </label>
-          </fieldset>
 
-          <fieldset disabled={!onCorrectChain}>
-            <legend>liquidity lock</legend>
-            <label className="row">
-              <input
-                type="checkbox"
-                checked={liquidityLocked}
-                onChange={(e) => setLiquidityLocked(e.target.checked)}
-              />
-              liquidity locked
-            </label>
-            <p className="hint">
-              {liquidityLocked
-                ? 'locked forever — no principal withdraw path while stamp is true.'
-                : 'creator can withdraw LP principal (unlockRecipient = creator).'}
-            </p>
-          </fieldset>
+            <fieldset disabled={!onCorrectChain}>
+              <legend>delivery</legend>
+              <label className="row">
+                <input
+                  type="radio"
+                  checked={delivery === 'instant'}
+                  onChange={() => setDelivery('instant')}
+                />
+                INSTANT (10-minute timelock before claim)
+              </label>
+              <label className="row">
+                <input
+                  type="radio"
+                  checked={delivery === 'vest'}
+                  onChange={() => setDelivery('vest')}
+                />
+                VEST
+              </label>
+              {delivery === 'vest' && (
+                <label>
+                  vest duration (days)
+                  <input
+                    type="number"
+                    min={1}
+                    value={vestDays}
+                    onChange={(e) => setVestDays(Number(e.target.value))}
+                  />
+                </label>
+              )}
+            </fieldset>
 
-          <label>
-            declared use (recorded in calldata only)
-            <input
-              value={declaredUseText}
-              maxLength={64}
-              onChange={(e) => setDeclaredUseText(e.target.value)}
-              disabled={!onCorrectChain}
-              placeholder="optional — keccak256(utf8) into bytes32"
-            />
-            <span className="hint">
-              not stored or emitted on Express; only in constructor calldata /
-              init-code hash.
-            </span>
-          </label>
-
-          {pairToken === zeroAddress && (
-            <div className="pipeline">
-              <p>
-                this launch sends {bufferEth} ETH as a settle buffer
-              </p>
+            <fieldset disabled={!onCorrectChain}>
+              <legend>side pool</legend>
               <p className="hint">
-                excess is not recoverable — adapter refunds unused ETH to the
-                listing contract; the listing has no ETH withdrawal path
-                (NOTES.md 0j). default buffer stays {bufferEth} ETH (fork
-                tests); the trace does not yield a smaller sufficient amount.
+                factory stamps createSidePool / sidePoolBps / refPrice at list
+                (NOTES.md 0f). defaults loaded from chain; toggles follow those
+                stamped values.
               </p>
-            </div>
-          )}
+              <label className="row">
+                <input
+                  type="checkbox"
+                  checked={createSidePool}
+                  onChange={(e) => setCreateSidePool(e.target.checked)}
+                />
+                create side pool
+              </label>
+              <label>
+                side pool bps (0–2000)
+                <input
+                  type="number"
+                  min={0}
+                  max={SIDE_POOL_BPS_MAX}
+                  value={sidePoolBps}
+                  onChange={(e) => setSidePoolBps(Number(e.target.value))}
+                />
+              </label>
+            </fieldset>
 
-          <button
-            type="button"
-            className="btn95 go"
-            disabled={!canSubmit}
-            onClick={() => void launch.run(buildParams())}
-          >
-            {busy ? 'working…' : 'mine + list'}
-          </button>
+            <fieldset disabled={!onCorrectChain}>
+              <legend>liquidity lock</legend>
+              <label className="row">
+                <input
+                  type="checkbox"
+                  checked={liquidityLocked}
+                  onChange={(e) => setLiquidityLocked(e.target.checked)}
+                />
+                liquidity locked
+              </label>
+              <p className="hint">
+                {liquidityLocked
+                  ? 'locked forever — no principal withdraw path while stamp is true.'
+                  : 'creator can withdraw LP principal (unlockRecipient = creator).'}
+              </p>
+            </fieldset>
 
-          {(launch.status || launch.mineStats || launch.selfTestLine || launch.error) && (
-            <div className="pipeline">
-              {launch.status && <p className="status">{launch.status}</p>}
-              {launch.mineStats && <p className="hint">{launch.mineStats}</p>}
-              {launch.selfTestLine && <p className="hint">{launch.selfTestLine}</p>}
-              {launch.error && <p className="check bad">{launch.error}</p>}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+            <label>
+              declared use (recorded in calldata only)
+              <input
+                value={declaredUseText}
+                maxLength={64}
+                onChange={(e) => setDeclaredUseText(e.target.value)}
+                disabled={!onCorrectChain}
+                placeholder="optional — keccak256(utf8) into bytes32"
+              />
+              <span className="hint">
+                not stored or emitted on Express; only in constructor calldata /
+                init-code hash.
+              </span>
+            </label>
+
+            {pairToken === zeroAddress && (
+              <div className="pipeline">
+                <p>this launch sends {bufferEth} ETH as a settle buffer</p>
+                <p className="hint">
+                  excess is not recoverable — adapter refunds unused ETH to the
+                  listing contract; the listing has no ETH withdrawal path
+                  (NOTES.md 0j). default buffer stays {bufferEth} ETH (fork
+                  tests); the trace does not yield a smaller sufficient amount.
+                </p>
+              </div>
+            )}
+
+            <button
+              type="button"
+              className="btn95 go"
+              disabled={!canSubmit}
+              onClick={() => void launch.run(buildParams())}
+            >
+              {busy ? 'working…' : 'mine + list'}
+            </button>
+
+            {(mining || launch.status || launch.mineStats || launch.selfTestLine || launch.error) && (
+              <div className={mining ? 'crt-mine' : 'pipeline'}>
+                {mining && (
+                  <p className="crt-line">
+                    VANITY MINE · attempts {attempts ?? '…'}
+                  </p>
+                )}
+                {launch.status && <p className="status">{launch.status}</p>}
+                {launch.mineStats && !mining && (
+                  <p className="hint">{launch.mineStats}</p>
+                )}
+                {launch.mineStats && mining && (
+                  <p className="crt-line dim">{launch.mineStats}</p>
+                )}
+                {launch.selfTestLine && (
+                  <p className="hint">{launch.selfTestLine}</p>
+                )}
+                {launch.error && <p className="check bad">{launch.error}</p>}
+              </div>
+            )}
+          </div>
+        </Win95Window>
+      )}
+
+      {launch.receipt && (
+        <Win95Window
+          id="certificate"
+          title="certificate.exe"
+          titleTone="green"
+          width={480}
+          onClose={() => {
+            launch.reset()
+            onCloseCertificate()
+          }}
+        >
+          <div className="cert-stamp-row">
+            <Stamp variant="stonkz">STONKZ</Stamp>
+          </div>
+          <Receipt data={launch.receipt} onReset={launch.reset} chrome={false} />
+        </Win95Window>
+      )}
+    </>
   )
 }

@@ -2,6 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { formatEther, getAddress, type Address } from 'viem'
 import { useBlock, usePublicClient } from 'wagmi'
 import { env } from '../config/env'
+import { HelthBar } from '../shell/HelthBar'
+import { Stamp } from '../shell/Stamp'
+import { Win95Window } from '../shell/Window'
+import { useWindowManager } from '../shell/windowManager'
 import { refreshMutable, vestedAvailable } from '../indexer/hydrate'
 import { loadEnvelope, saveEnvelope } from '../indexer/storage'
 import type { IndexedListing } from '../indexer/types'
@@ -21,14 +25,15 @@ function tierLabel(startMcap: string): string {
   return `${formatEther(v)} (at launch)`
 }
 
-export function ListingDetail({
+export function TokenWindow({
   listing,
-  onBack,
+  onClose,
 }: {
   listing: Address
-  onBack: () => void
+  onClose: () => void
 }) {
   const client = usePublicClient()
+  const { open } = useWindowManager()
   const factory = env.addrExpressFactory
   const [record, setRecord] = useState<IndexedListing | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -41,8 +46,16 @@ export function ListingDetail({
       (L) => L.listing.toLowerCase() === listing.toLowerCase(),
     )
     setRecord(found ?? null)
-    if (!found) setErr('listing not in local index — scan listings first')
+    if (!found) setErr('listing not in local index — open the_market.exe first')
   }, [factory, listing])
+
+  useEffect(() => {
+    if (!record) return
+    open(
+      `token:${listing}` as `token:${string}`,
+      `${record.symbol.toLowerCase()}.exe`,
+    )
+  }, [record, listing, open])
 
   const refresh = useCallback(async () => {
     if (!client || !factory || !record) return
@@ -73,17 +86,20 @@ export function ListingDetail({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh on open only
   }, [listing])
 
+  const title = record
+    ? `${record.symbol.toLowerCase()}.exe`
+    : 'token.exe'
+
   if (!record) {
     return (
-      <div className="win">
-        <div className="tb">stonkz_detail.exe</div>
-        <div className="body95">
-          <p className="check bad">{err ?? 'loading…'}</p>
-          <button type="button" className="btn95" onClick={onBack}>
-            back
-          </button>
-        </div>
-      </div>
+      <Win95Window
+        id={`token:${listing}`}
+        title={title}
+        width={480}
+        onClose={onClose}
+      >
+        <p className="check bad">{err ?? 'loading…'}</p>
+      </Win95Window>
     )
   }
 
@@ -97,92 +113,105 @@ export function ListingDetail({
         : `VEST (${record.creatorReserveState.vestDuration}s)`
 
   const mk = record.mainPoolKey
+  const reserveTotal = BigInt(record.creatorReserveState.total || '0')
+  const reserveClaimed = BigInt(record.creatorReserveState.claimed || '0')
+  const showReserveHelth =
+    record.creatorReserveState.filed && reserveTotal > 0n
+  const reserveRatio =
+    reserveTotal > 0n
+      ? Number((reserveClaimed * 10_000n) / reserveTotal) / 10_000
+      : 0
 
   return (
-    <div className="win receipt">
-      <div className="tb">stonkz_detail.exe</div>
-      <div className="body95">
+    <Win95Window
+      id={`token:${listing}`}
+      title={title}
+      width={520}
+      onClose={onClose}
+    >
+      <div className="token-head">
         <p className="eyebrow">
           {record.symbol} — {record.name}
         </p>
-        <p>
-          token{' '}
-          <a href={explorer(`address/${record.token}`)} target="_blank" rel="noreferrer">
-            {record.token}
-          </a>
-        </p>
-        <p>
-          listing{' '}
-          <a href={explorer(`address/${record.listing}`)} target="_blank" rel="noreferrer">
-            {record.listing}
-          </a>
-        </p>
-        <p>
-          creator{' '}
-          <a href={explorer(`address/${record.creator}`)} target="_blank" rel="noreferrer">
-            {short(record.creator)}
-          </a>
-        </p>
-        <div className="rule" />
-        <p>start mcap {tierLabel(record.startMcap)}</p>
-        <p>start price {record.startPriceWad} wad (at launch)</p>
-        <p>total supply {record.totalSupply} raw</p>
-        <div className="rule" />
-        <p>
-          creator reserve {record.creatorReserve} raw · delivery {mode}
-        </p>
-        {record.creatorReserveState.filed && BigInt(record.creatorReserve) > 0n && (
-          <>
-            <p className="hint">
-              claimed {record.creatorReserveState.claimed} / vested{' '}
-              {vest.vested.toString()} / unvested {vest.unvested.toString()} /
-              claimable now {vest.claimable.toString()}
-            </p>
-            {record.creatorReserveState.mode === 0 && (
-              <p className="hint">
-                unlockedAt {record.creatorReserveState.unlockedAt} (unix) — 10-min
-                INSTANT timelock
-              </p>
-            )}
-          </>
-        )}
-        <p>
-          side pool{' '}
-          {!record.createSidePool
-            ? 'off'
-            : record.sidePoolDeployed
-              ? `deployed (${record.sidePoolBps} bps)`
-              : `pending (${record.sidePoolBps} bps) — deploySidePool is permissionless`}
-        </p>
-        <p>
-          liquidity{' '}
-          {record.liquidityLocked
-            ? 'locked forever'
-            : 'unlockable — creator may withdraw principal'}
-        </p>
-        <div className="rule" />
-        <p className="hint">main pool key (at launch)</p>
-        <p>
-          pair {short(mk.currency0)} / {short(mk.currency1)} · fee {mk.fee} pips ·
-          spacing {mk.tickSpacing}
-        </p>
-        <p>
-          hook{' '}
-          <a href={explorer(`address/${mk.hooks}`)} target="_blank" rel="noreferrer">
-            {mk.hooks}
-          </a>
-        </p>
-        <p className="hint">launch block {record.blockNumber}</p>
-        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <button type="button" className="btn95" onClick={onBack}>
-            back
-          </button>
-          <button type="button" className="btn95" onClick={() => void refresh()}>
-            refresh mutable
-          </button>
-        </div>
-        {err && <p className="check bad">{err}</p>}
+        <Stamp variant={record.liquidityLocked ? 'stonkz' : 'red'}>
+          {record.liquidityLocked ? 'locked forever' : 'creator can withdraw'}
+        </Stamp>
       </div>
-    </div>
+      <p>
+        token{' '}
+        <a href={explorer(`address/${record.token}`)} target="_blank" rel="noreferrer">
+          {record.token}
+        </a>
+      </p>
+      <p>
+        listing{' '}
+        <a href={explorer(`address/${record.listing}`)} target="_blank" rel="noreferrer">
+          {record.listing}
+        </a>
+      </p>
+      <p>
+        creator{' '}
+        <a href={explorer(`address/${record.creator}`)} target="_blank" rel="noreferrer">
+          {short(record.creator)}
+        </a>
+      </p>
+      <div className="rule" />
+      <p>start mcap {tierLabel(record.startMcap)}</p>
+      <p>start price {record.startPriceWad} wad (at launch)</p>
+      <p>total supply {record.totalSupply} raw</p>
+      <div className="rule" />
+      <p>
+        creator reserve {record.creatorReserve} raw · delivery {mode}
+      </p>
+      {showReserveHelth && (
+        <HelthBar
+          ratio={Number.isFinite(reserveRatio) ? reserveRatio : 0}
+          labelLeft="reserve delivered"
+          labelRight={`${reserveClaimed.toString()} / ${reserveTotal.toString()}`}
+        />
+      )}
+      {record.creatorReserveState.filed && BigInt(record.creatorReserve) > 0n && (
+        <>
+          <p className="hint">
+            claimed {record.creatorReserveState.claimed} / vested{' '}
+            {vest.vested.toString()} / unvested {vest.unvested.toString()} /
+            claimable now {vest.claimable.toString()}
+          </p>
+          {record.creatorReserveState.mode === 0 && (
+            <p className="hint">
+              unlockedAt {record.creatorReserveState.unlockedAt} (unix) — 10-min
+              INSTANT timelock
+            </p>
+          )}
+        </>
+      )}
+      <p>
+        side pool{' '}
+        {!record.createSidePool
+          ? 'off'
+          : record.sidePoolDeployed
+            ? `deployed (${record.sidePoolBps} bps)`
+            : `pending (${record.sidePoolBps} bps) — deploySidePool is permissionless`}
+      </p>
+      <div className="rule" />
+      <p className="hint">main pool key (at launch)</p>
+      <p>
+        pair {short(mk.currency0)} / {short(mk.currency1)} · fee {mk.fee} pips ·
+        spacing {mk.tickSpacing}
+      </p>
+      <p>
+        hook{' '}
+        <a href={explorer(`address/${mk.hooks}`)} target="_blank" rel="noreferrer">
+          {mk.hooks}
+        </a>
+      </p>
+      <p className="hint">launch block {record.blockNumber}</p>
+      <div className="btn-row">
+        <button type="button" className="btn95" onClick={() => void refresh()}>
+          refresh mutable
+        </button>
+      </div>
+      {err && <p className="check bad">{err}</p>}
+    </Win95Window>
   )
 }
