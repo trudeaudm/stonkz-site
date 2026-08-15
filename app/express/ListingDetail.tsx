@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { formatEther, getAddress, type Address } from 'viem'
+import { getAddress, type Address } from 'viem'
 import { useBlock, usePublicClient } from 'wagmi'
 import { directListingAbi } from '../abi/directListing'
 import { env } from '../config/env'
@@ -7,9 +7,19 @@ import { HelthBar } from '../shell/HelthBar'
 import { Stamp } from '../shell/Stamp'
 import { Win95Window } from '../shell/Window'
 import { useWindowManager } from '../shell/windowManager'
-import { refreshMutable, vestedAvailable } from '../indexer/hydrate'
+import {
+  hydrateListingByAddress,
+  refreshMutable,
+  vestedAvailable,
+} from '../indexer/hydrate'
 import { loadEnvelope, saveEnvelope } from '../indexer/storage'
 import type { IndexedListing } from '../indexer/types'
+import {
+  formatStartMcapLine,
+  formatStartPriceUsdLine,
+  formatStampedEthUsdLine,
+  isV2UsdStamp,
+} from './listingDisplay'
 
 function short(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
@@ -17,13 +27,6 @@ function short(addr: string) {
 
 function explorer(path: string) {
   return `${env.explorerUrl.replace(/\/$/, '')}/${path}`
-}
-
-function tierLabel(startMcap: string): string {
-  const v = BigInt(startMcap)
-  if (v === 4000n * 10n ** 18n) return '$4,000 (at launch)'
-  if (v === 8000n * 10n ** 18n) return '$8,000 (at launch)'
-  return `${formatEther(v)} (at launch)`
 }
 
 export function TokenWindow({
@@ -38,18 +41,79 @@ export function TokenWindow({
   const factory = env.addrExpressFactory
   const [record, setRecord] = useState<IndexedListing | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const [ethUsdWad, setEthUsdWad] = useState<bigint | null>(null)
+  const [ethUsdResolved, setEthUsdResolved] = useState(false)
   const block = useBlock({ watch: true })
 
   useEffect(() => {
-    if (!factory) return
-    const envl = loadEnvelope(env.chainId, factory)
-    const found = envl?.listings.find(
-      (L) => L.listing.toLowerCase() === listing.toLowerCase(),
-    )
-    setRecord(found ?? null)
-    if (!found) setErr('listing not in local index — open the_market.exe first')
-  }, [factory, listing])
+    let cancelled = false
+    void (async () => {
+      setLoading(true)
+      setErr(null)
+      setRecord(null)
+      setEthUsdWad(null)
+      setEthUsdResolved(false)
+
+      if (factory) {
+        const envl = loadEnvelope(env.chainId, factory)
+        const found = envl?.listings.find(
+          (L) => L.listing.toLowerCase() === listing.toLowerCase(),
+        )
+        if (found) {
+          if (cancelled) return
+          setRecord(found)
+          if (found.ethUsdWad != null) {
+            setEthUsdWad(BigInt(found.ethUsdWad))
+            setEthUsdResolved(true)
+          } else {
+            setEthUsdWad(null)
+            setEthUsdResolved(false)
+          }
+          setLoading(false)
+          return
+        }
+      }
+
+      if (!client) {
+        if (!cancelled) {
+          setErr('no rpc client')
+          setLoading(false)
+        }
+        return
+      }
+
+      try {
+        const hydrated = await hydrateListingByAddress(
+          client,
+          getAddress(listing),
+        )
+        if (cancelled) return
+        if (!hydrated) {
+          setErr(
+            'not a listing contract — no code at address, or getters reverted',
+          )
+          setLoading(false)
+          return
+        }
+        setRecord(hydrated)
+        if (hydrated.ethUsdWad != null) {
+          setEthUsdWad(BigInt(hydrated.ethUsdWad))
+        } else {
+          setEthUsdWad(null)
+        }
+        setEthUsdResolved(true)
+        setLoading(false)
+      } catch (e) {
+        if (cancelled) return
+        setErr(e instanceof Error ? e.message : String(e))
+        setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [factory, listing, client])
 
   useEffect(() => {
     if (!record) return
@@ -60,7 +124,7 @@ export function TokenWindow({
   }, [record, listing, open])
 
   const refresh = useCallback(async () => {
-    if (!client || !factory || !record) return
+    if (!client || !record) return
     const mut = await refreshMutable(client, getAddress(record.listing))
     if (!mut) {
       setErr('mutable refresh failed')
@@ -73,22 +137,23 @@ export function TokenWindow({
       hydratedAt: Date.now(),
     }
     setRecord(next)
-    const envl = loadEnvelope(env.chainId, factory)
-    if (envl) {
-      envl.listings = envl.listings.map((L) =>
-        L.listing.toLowerCase() === next.listing.toLowerCase() ? next : L,
-      )
-      envl.updatedAt = Date.now()
-      saveEnvelope(envl)
+    if (factory && !next.notYetIndexed) {
+      const envl = loadEnvelope(env.chainId, factory)
+      if (envl) {
+        envl.listings = envl.listings.map((L) =>
+          L.listing.toLowerCase() === next.listing.toLowerCase() ? next : L,
+        )
+        envl.updatedAt = Date.now()
+        saveEnvelope(envl)
+      }
     }
   }, [client, factory, record])
 
   useEffect(() => {
-    if (!client || !record) return
+    if (!client || !record || ethUsdResolved) return
     let cancelled = false
     void (async () => {
       try {
-        // V2 listings only — indexer is per-factory so V1 rows never appear once env flips; no shim.
         const wad = await client.readContract({
           address: getAddress(record.listing),
           abi: directListingAbi,
@@ -97,17 +162,20 @@ export function TokenWindow({
         if (!cancelled) setEthUsdWad(wad)
       } catch {
         if (!cancelled) setEthUsdWad(null)
+      } finally {
+        if (!cancelled) setEthUsdResolved(true)
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [client, record])
+  }, [client, record, ethUsdResolved])
 
   useEffect(() => {
+    if (!record) return
     void refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh on open only
-  }, [listing])
+  }, [listing, record?.listing])
 
   const title = record
     ? `${record.symbol.toLowerCase()}.exe`
@@ -121,7 +189,9 @@ export function TokenWindow({
         width={480}
         onClose={onClose}
       >
-        <p className="check bad">{err ?? 'loading…'}</p>
+        <p className={err ? 'check bad' : 'hint'}>
+          {err ?? (loading ? 'loading from chain…' : 'loading…')}
+        </p>
       </Win95Window>
     )
   }
@@ -144,6 +214,7 @@ export function TokenWindow({
     reserveTotal > 0n
       ? Number((reserveClaimed * 10_000n) / reserveTotal) / 10_000
       : 0
+  const v2Usd = isV2UsdStamp(ethUsdWad)
 
   return (
     <Win95Window
@@ -160,6 +231,9 @@ export function TokenWindow({
           {record.liquidityLocked ? 'locked forever' : 'creator can withdraw'}
         </Stamp>
       </div>
+      {record.notYetIndexed && (
+        <p className="hint">not yet indexed — reading directly from chain</p>
+      )}
       <p>
         token{' '}
         <a href={explorer(`address/${record.token}`)} target="_blank" rel="noreferrer">
@@ -179,16 +253,23 @@ export function TokenWindow({
         </a>
       </p>
       <div className="rule" />
-      <p>start mcap {tierLabel(record.startMcap)}</p>
-      <p>start price {record.startPriceWad} wad (at launch)</p>
-      <p>total supply {record.totalSupply} raw</p>
-      {/* V2 listings only — indexer is per-factory so V1 rows never appear once env flips; no shim. */}
-      {ethUsdWad !== null && (
-        <div className="dr">
-          <span>stamped ETH/USD</span>
-          <b>~{(Number(ethUsdWad) / 1e18).toFixed(2)}/ETH</b>
-        </div>
+      {!ethUsdResolved ? (
+        <p className="hint">reading stamped economics…</p>
+      ) : (
+        <>
+          <p>{formatStartMcapLine(record.startMcap, ethUsdWad)}</p>
+          {v2Usd && ethUsdWad != null && (
+            <>
+              <p>{formatStampedEthUsdLine(ethUsdWad)}</p>
+              <p>{formatStartPriceUsdLine(record.startPriceWad, ethUsdWad)}</p>
+            </>
+          )}
+          {!v2Usd && (
+            <p>start price {record.startPriceWad} wad (at launch)</p>
+          )}
+        </>
       )}
+      <p>total supply {record.totalSupply} raw</p>
       <div className="rule" />
       <p>
         creator reserve {record.creatorReserve} raw · delivery {mode}
@@ -235,7 +316,9 @@ export function TokenWindow({
           {mk.hooks}
         </a>
       </p>
-      <p className="hint">launch block {record.blockNumber}</p>
+      {!record.notYetIndexed && (
+        <p className="hint">launch block {record.blockNumber}</p>
+      )}
       <div className="btn-row">
         <button type="button" className="btn95" onClick={() => void refresh()}>
           refresh mutable

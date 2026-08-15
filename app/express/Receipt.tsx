@@ -1,6 +1,11 @@
-import { formatEther } from 'viem'
 import { env } from '../config/env'
 import type { LaunchReceipt } from './useLaunch'
+import {
+  formatStartMcapLine,
+  formatStartPriceUsdLine,
+  formatStampedEthUsdLine,
+  isV2UsdStamp,
+} from './listingDisplay'
 
 function short(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
@@ -27,6 +32,8 @@ export function Receipt({
         ? 'INSTANT (10-min timelock)'
         : `VEST (${data.vestDuration.toString()}s)`
 
+  const v2Usd = isV2UsdStamp(data.ethUsdWad)
+
   const body = (
     <>
       <p className="eyebrow">express listing filed</p>
@@ -39,14 +46,15 @@ export function Receipt({
       <p>listing {data.listing}</p>
       <p>creator {short(data.creator)}</p>
       <div className="rule" />
-      <p>start mcap {formatEther(data.startMcap)} (pair units)</p>
-      <p>start price {data.startPriceWad.toString()} wad</p>
+      <p>{formatStartMcapLine(data.startMcap, data.ethUsdWad)}</p>
+      {v2Usd && (
+        <>
+          <p>{formatStampedEthUsdLine(data.ethUsdWad)} (immutable at filing)</p>
+          <p>{formatStartPriceUsdLine(data.startPriceWad, data.ethUsdWad)}</p>
+        </>
+      )}
+      {!v2Usd && <p>start price {data.startPriceWad.toString()} wad</p>}
       <p>start tick {data.startTick}</p>
-      <p>
-        stamped ETH/USD ~
-        {(Number(data.ethUsdWad) / 1e18).toFixed(2)}/ETH (immutable at
-        filing)
-      </p>
       <div className="rule" />
       <p>
         creator reserve {data.creatorReserve.toString()} raw · delivery {mode}

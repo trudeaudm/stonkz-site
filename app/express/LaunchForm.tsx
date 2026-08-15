@@ -18,6 +18,11 @@ import { Win95Window } from '../shell/Window'
 import { useWindowManager } from '../shell/windowManager'
 import { Receipt } from './Receipt'
 import {
+  FACTORY_V2_FAIL_COPY,
+  factoryV2PassCopy,
+  fingerprintExpressFactoryV2,
+} from './factoryFingerprint'
+import {
   formatEthSig,
   getListCostEstimate,
   type ListCostEstimate,
@@ -67,6 +72,24 @@ export function LaunchHost({
   const [vanityParityOk, setVanityParityOk] = useState<boolean | null>(null)
   const [vanityParityDetail, setVanityParityDetail] = useState<string>('')
   const [vanityParityRan, setVanityParityRan] = useState(false)
+  /** null = probing; true = V2; false = stale/unknown factory */
+  const [factoryIsV2, setFactoryIsV2] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (!formOpen && !precheckOpen) return
+    if (!publicClient || !factoryAddr) {
+      setFactoryIsV2(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const ok = await fingerprintExpressFactoryV2(publicClient, factoryAddr)
+      if (!cancelled) setFactoryIsV2(ok)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [formOpen, precheckOpen, publicClient, factoryAddr])
 
   useEffect(() => {
     if (!formOpen && !precheckOpen) return
@@ -285,6 +308,29 @@ export function LaunchHost({
 
   const checks: Check[] = useMemo(() => {
     const list: Check[] = []
+
+    if (factoryAddr) {
+      if (factoryIsV2 === null) {
+        list.push({
+          ok: false,
+          label: 'factoryFingerprint',
+          detail: 'probing factory fingerprint…',
+        })
+      } else if (factoryIsV2) {
+        list.push({
+          ok: true,
+          label: 'factoryFingerprint',
+          detail: factoryV2PassCopy(factoryAddr),
+        })
+      } else {
+        list.push({
+          ok: false,
+          label: 'factoryFingerprint',
+          detail: FACTORY_V2_FAIL_COPY,
+        })
+      }
+    }
+
     list.push({
       ok: deploysEnabled === true,
       label: 'deploysEnabled',
@@ -363,6 +409,8 @@ export function LaunchHost({
 
     return list
   }, [
+    factoryAddr,
+    factoryIsV2,
     deploysEnabled,
     allowlistCount,
     allowed.data,
@@ -384,6 +432,7 @@ export function LaunchHost({
     onCorrectChain &&
     formValid &&
     allGreen &&
+    factoryIsV2 === true &&
     !pairHardFail &&
     !busy &&
     Boolean(address) &&

@@ -22,6 +22,10 @@ import {
   predictTokenAddressLocal,
 } from '../mining/create2'
 import { mineVanitySalt } from '../mining/mineVanity'
+import {
+  FACTORY_V2_FAIL_COPY,
+  fingerprintExpressFactoryV2,
+} from './factoryFingerprint'
 
 export function listBufferWei(): bigint {
   return BigInt(env.listBufferWei)
@@ -195,6 +199,16 @@ export function useLaunch() {
       let current: PipelineStep = 'idle'
       let attachedValue = 0n
       try {
+        // 0. factory fingerprint — hard-block stale V1 / unknown factory builds
+        setStatus('0/7 factory fingerprint (v2)')
+        const factoryIsV2 = await fingerprintExpressFactoryV2(
+          publicClient,
+          factory,
+        )
+        if (!factoryIsV2) {
+          throw new Error(FACTORY_V2_FAIL_COPY)
+        }
+
         // 1. build ListingParams (already ordered by caller per NOTES.md 0f)
         current = 'build'
         setStep(current)
@@ -220,6 +234,7 @@ export function useLaunch() {
           factory,
           deployer: address,
           initCodeHash,
+          factoryIsV2: true,
           handlers: {
             onProgress: (pr) => {
               setMineStats(

@@ -45,6 +45,10 @@ export type IndexedListing = {
   // mutable — refetch on detail open
   sidePoolDeployed: boolean
   hydratedAt: number
+  /** Set when hydrated by address outside the local index (pre-scan). */
+  notYetIndexed?: boolean
+  /** Immutable ETH/USD stamp — V2 listings only; absent/0 on V1-era objects. */
+  ethUsdWad?: string
 }
 
 export type IndexEnvelope = {
