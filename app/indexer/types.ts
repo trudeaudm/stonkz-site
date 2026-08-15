@@ -1,6 +1,9 @@
 import type { Address, Hex } from 'viem'
 
-export const INDEX_CACHE_PREFIX = 'stonkz:index:v1:'
+/** v2 — clears stale v1 envelopes that advanced cursor past filings after hydrate threw. */
+export const INDEX_CACHE_PREFIX = 'stonkz:index:v2:'
+/** Root prefix — GC drops any prior schema version under this. */
+export const INDEX_CACHE_ROOT = 'stonkz:index:'
 
 export type CreatorReserveState = {
   mode: number
@@ -21,7 +24,7 @@ export type MainPoolKey = {
 
 /** Serializable hydrated listing — immutable stamps + mutable flags. */
 export type IndexedListing = {
-  v: 1
+  v: 2
   listing: Address
   token: Address
   creator: Address
@@ -47,12 +50,17 @@ export type IndexedListing = {
   hydratedAt: number
   /** Set when hydrated by address outside the local index (pre-scan). */
   notYetIndexed?: boolean
-  /** Immutable ETH/USD stamp — V2 listings only; absent/0 on V1-era objects. */
+  /** Immutable ETH/USD stamp — V2+ listings; absent/0 on V1-era objects. */
   ethUsdWad?: string
+  /**
+   * Set when ExpressListed was indexed but one or more getters failed.
+   * Rendered as an error card — never silently dropped.
+   */
+  hydrateError?: string
 }
 
 export type IndexEnvelope = {
-  v: 1
+  v: 2
   chainId: number
   factory: Address
   cursor: string // next block to scan (inclusive)

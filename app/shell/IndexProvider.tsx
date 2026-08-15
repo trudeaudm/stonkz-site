@@ -29,9 +29,13 @@ type IndexValue = {
 const Ctx = createContext<IndexValue | null>(null)
 
 function tierLabel(startMcap: string): string {
-  const v = BigInt(startMcap)
-  if (v === 4000n * 10n ** 18n) return '$4K'
-  if (v === 8000n * 10n ** 18n) return '$8K'
+  try {
+    const v = BigInt(startMcap)
+    if (v === 4000n * 10n ** 18n) return '$4K'
+    if (v === 8000n * 10n ** 18n) return '$8K'
+  } catch {
+    /* unreadable card */
+  }
   return 'custom tier'
 }
 
@@ -52,7 +56,9 @@ export function IndexProvider({ children }: { children: ReactNode }) {
         setLogLines(
           cached.listings.map((L) => ({
             id: `${L.txHash}:${L.logIndex}`,
-            text: `$${L.symbol} listed · ${tierLabel(L.startMcap)} tier · block ${L.blockNumber}`,
+            text: L.hydrateError
+              ? `ExpressListed ${L.listing.slice(0, 10)}… · indexed but unreadable — ${L.hydrateError}`
+              : `$${L.symbol} listed · ${tierLabel(L.startMcap)} tier · block ${L.blockNumber}`,
             at: L.hydratedAt,
           })),
         )
@@ -96,7 +102,9 @@ export function IndexProvider({ children }: { children: ReactNode }) {
             ...prev,
             {
               id,
-              text: `$${L.symbol} listed · ${tierLabel(L.startMcap)} tier · block ${L.blockNumber}`,
+              text: L.hydrateError
+                ? `ExpressListed ${L.listing.slice(0, 10)}… · indexed but unreadable — ${L.hydrateError}`
+                : `$${L.symbol} listed · ${tierLabel(L.startMcap)} tier · block ${L.blockNumber}`,
               at: Date.now(),
             },
           ])

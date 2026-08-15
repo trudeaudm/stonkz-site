@@ -2,9 +2,13 @@ import { useMemo } from 'react'
 import { useIndex } from '../shell/IndexProvider'
 
 function tierLabel(startMcap: string): string {
-  const v = BigInt(startMcap)
-  if (v === 4000n * 10n ** 18n) return '$4K'
-  if (v === 8000n * 10n ** 18n) return '$8K'
+  try {
+    const v = BigInt(startMcap)
+    if (v === 4000n * 10n ** 18n) return '$4K'
+    if (v === 8000n * 10n ** 18n) return '$8K'
+  } catch {
+    /* ignore */
+  }
   return 'custom tier'
 }
 
@@ -23,7 +27,9 @@ export function TickerTape() {
       })
     }
     const ticks = listings.map((L) => ({
-      text: `$${L.symbol} · ${tierLabel(L.startMcap)} tier · block ${L.blockNumber}`,
+      text: L.hydrateError
+        ? `unreadable · block ${L.blockNumber}`
+        : `$${L.symbol} · ${tierLabel(L.startMcap)} tier · block ${L.blockNumber}`,
       up: true as const,
     }))
     const out: { text: string; up?: boolean }[] = []

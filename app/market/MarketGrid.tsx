@@ -18,6 +18,29 @@ export function TokenCard({
   listing: IndexedListing
   onOpen: (listing: Address) => void
 }) {
+  if (listing.hydrateError) {
+    return (
+      <StaticWin
+        title="📁 unreadable.exe — indexed but broken"
+        className="token-card"
+      >
+        <p className="check bad">
+          indexed but unreadable — {listing.hydrateError}
+        </p>
+        <p className="hint">
+          listing {listing.listing.slice(0, 10)}… · block {listing.blockNumber}
+        </p>
+        <button
+          type="button"
+          className="btn95"
+          onClick={() => onOpen(getAddress(listing.listing))}
+        >
+          open
+        </button>
+      </StaticWin>
+    )
+  }
+
   const sym = listing.symbol
   const initial = sym.slice(0, 1).toUpperCase() || '?'
 

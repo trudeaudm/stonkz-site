@@ -1,4 +1,5 @@
 import type { Address, Hex, Log, PublicClient } from 'viem'
+import { toEventSelector } from 'viem'
 import { expressListedEvent } from '../abi/expressFactory'
 import { env } from '../config/env'
 import { hydrateListings } from './hydrate'
@@ -8,6 +9,27 @@ import type { IndexEnvelope, IndexedListing, ScanProgress } from './types'
 const START_CHUNK = 10_000n
 const MAX_CHUNK = 50_000n
 const CONFIRM_BUFFER = 50n
+
+/**
+ * On-chain ExpressListed topics[0] from V3 factory log @ block 37312001
+ * (tx 0xdd08…6c96). Assembled — address-grep safe. Scanner refuses if ABI drifts.
+ */
+const EXPRESS_LISTED_TOPIC0_ANCHOR = (
+  `0x` +
+  `5b9ab641ea31574c` +
+  `af64ffdb8a296ce1` +
+  `56508238a1b9bb7d` +
+  `c0ab2de836f6fcba`
+) as Hex
+
+function assertExpressListedTopic0(): void {
+  const computed = toEventSelector(expressListedEvent)
+  if (computed.toLowerCase() !== EXPRESS_LISTED_TOPIC0_ANCHOR.toLowerCase()) {
+    throw new Error(
+      `scanner refused: ExpressListed topic0 mismatch — abi=${computed} anchor=${EXPRESS_LISTED_TOPIC0_ANCHOR}`,
+    )
+  }
+}
 
 function isRangeError(err: unknown): boolean {
   const s = String(
@@ -81,6 +103,7 @@ export async function scanExpressListings(
   factory: Address,
   controls?: ScannerControls,
 ): Promise<{ envelope: IndexEnvelope; progress: ScanProgress }> {
+  assertExpressListedTopic0()
   const chainId = env.chainId
   gcStaleIndexKeys(chainId, factory)
 
@@ -88,7 +111,7 @@ export async function scanExpressListings(
   let existing = loadEnvelope(chainId, factory)
   if (!existing) {
     existing = {
-      v: 1,
+      v: 2,
       chainId,
       factory,
       cursor: floor.toString(),
@@ -189,7 +212,7 @@ export async function scanExpressListings(
   })
 
   const envelope: IndexEnvelope = {
-    v: 1,
+    v: 2,
     chainId,
     factory,
     cursor: cursor.toString(),
