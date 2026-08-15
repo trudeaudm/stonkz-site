@@ -1,13 +1,22 @@
 import { getAddress, type Address } from 'viem'
 import type { IndexedListing } from '../indexer/types'
+import {
+  formatDeltaPct,
+  formatUsdSpot,
+} from '../prices/spotMath'
+import { useMainPoolSpot } from '../prices/useMainPoolSpot'
 import { Stamp } from '../shell/Stamp'
 import { StaticWin } from '../shell/StaticWin'
 import { useIndex } from '../shell/IndexProvider'
 
 function tierLabel(startMcap: string): string {
-  const v = BigInt(startMcap)
-  if (v === 4000n * 10n ** 18n) return '$4K'
-  if (v === 8000n * 10n ** 18n) return '$8K'
+  try {
+    const v = BigInt(startMcap)
+    if (v === 4000n * 10n ** 18n) return '$4K'
+    if (v === 8000n * 10n ** 18n) return '$8K'
+  } catch {
+    /* unreadable */
+  }
   return 'custom'
 }
 
@@ -18,6 +27,8 @@ export function TokenCard({
   listing: IndexedListing
   onOpen: (listing: Address) => void
 }) {
+  const spot = useMainPoolSpot(listing, !listing.hydrateError)
+
   if (listing.hydrateError) {
     return (
       <StaticWin
@@ -43,6 +54,14 @@ export function TokenCard({
 
   const sym = listing.symbol
   const initial = sym.slice(0, 1).toUpperCase() || '?'
+  const stampUp = spot ? spot.deltaPct >= 0 : listing.liquidityLocked
+  const stampLabel = spot
+    ? spot.deltaPct >= 0
+      ? 'STONKZ'
+      : 'NOT STONKZ'
+    : listing.liquidityLocked
+      ? 'locked forever'
+      : 'unlockable'
 
   return (
     <StaticWin
@@ -54,12 +73,21 @@ export function TokenCard({
         <div className="grow">
           <div className="tk">
             ${sym}{' '}
-            <Stamp variant={listing.liquidityLocked ? 'stonkz' : 'not'}>
-              {listing.liquidityLocked ? 'locked forever' : 'unlockable'}
-            </Stamp>
+            <Stamp variant={stampUp ? 'stonkz' : 'not'}>{stampLabel}</Stamp>
           </div>
           <div className="nm">{listing.name}</div>
         </div>
+        {spot && (
+          <div>
+            <div className="px">{formatUsdSpot(spot.usdPerToken)}</div>
+            <div
+              className={`px ${spot.deltaPct >= 0 ? 'up' : 'down'}`}
+              style={{ fontSize: 11 }}
+            >
+              {formatDeltaPct(spot.deltaPct)}
+            </div>
+          </div>
+        )}
       </div>
       <div className="drs">
         <div className="dr">

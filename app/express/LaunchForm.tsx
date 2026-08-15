@@ -31,8 +31,9 @@ import { listBufferWei, useLaunch } from './useLaunch'
 
 const TIER_4K = 4000n * 10n ** 18n
 const TIER_8K = 8000n * 10n ** 18n
-const DEFAULT_SUPPLY = 1_000_000n * 10n ** 18n
-const SIDE_POOL_BPS_MAX = 2000
+/** Default Express supply — 100,000,000 tokens (1e8 × 1e18 raw). */
+const DEFAULT_SUPPLY_HUMAN = '100000000'
+const DEFAULT_SUPPLY = 100_000_000n * 10n ** 18n
 const CREATOR_RESERVE_BPS_MAX = 10_000 // NOTES.md 0h — bps of total supply; no named on-chain max
 
 function factory(): Address | undefined {
@@ -186,18 +187,18 @@ export function LaunchHost({
     }
   }, [formOpen, vanityParityRan, publicClient, factoryAddr, address])
 
-  const [name, setName] = useState('STONK')
-  const [symbol, setSymbol] = useState('STNK')
-  const [supplyHuman, setSupplyHuman] = useState('1000000')
+  const [name, setName] = useState('')
+  const [symbol, setSymbol] = useState('')
+  const [customSupply, setCustomSupply] = useState(false)
+  const [supplyHuman, setSupplyHuman] = useState(DEFAULT_SUPPLY_HUMAN)
   const [tier, setTier] = useState<'4k' | '8k'>('4k')
   const [creatorReserveBps, setCreatorReserveBps] = useState(0)
   const [delivery, setDelivery] = useState<'instant' | 'vest'>('instant')
   const [vestDays, setVestDays] = useState(30)
-  const [createSidePool, setCreateSidePool] = useState(true)
-  const [sidePoolBps, setSidePoolBps] = useState(500)
-  const [liquidityLocked, setLiquidityLocked] = useState(true)
   const [declaredUseText, setDeclaredUseText] = useState('')
-  const [defaultsLoaded, setDefaultsLoaded] = useState(false)
+  // Protocol-stamped fields — NOT user inputs. DeployControls defaults via
+  // StonkzExpressFactory._stampListingParams (createSidePool / sidePoolBps /
+  // liquidityLocked / refPriceWad). Caller values are overwritten on-chain.
 
   const enabled = Boolean(factoryAddr)
 
@@ -252,17 +253,6 @@ export function LaunchHost({
   const defLock = reads.data?.[5]?.result as boolean | undefined
   const allowlistCount = reads.data?.[6]?.result as bigint | undefined
 
-  useEffect(() => {
-    if (defaultsLoaded) return
-    if (defCreateSide === undefined || defSideBps === undefined || defLock === undefined) {
-      return
-    }
-    setCreateSidePool(defCreateSide)
-    setSidePoolBps(defSideBps)
-    setLiquidityLocked(defLock)
-    setDefaultsLoaded(true)
-  }, [defCreateSide, defSideBps, defLock, defaultsLoaded])
-
   const allowed = useReadContract({
     address: factoryAddr,
     abi: expressFactoryAbi,
@@ -281,12 +271,16 @@ export function LaunchHost({
         : undefined,
     query: {
       enabled: Boolean(
-        factoryAddr && createSidePool && sideTokenRef && pairToken !== undefined,
+        factoryAddr &&
+          defCreateSide === true &&
+          sideTokenRef &&
+          pairToken !== undefined,
       ),
     },
   })
 
   const totalSupply = useMemo(() => {
+    if (!customSupply) return DEFAULT_SUPPLY
     const n = Number(supplyHuman.replace(/,/g, ''))
     if (!Number.isFinite(n) || n <= 0) return 0n
     try {
@@ -294,7 +288,7 @@ export function LaunchHost({
     } catch {
       return 0n
     }
-  }, [supplyHuman])
+  }, [customSupply, supplyHuman])
 
   const formValid = useMemo(() => {
     if (!name.trim() || name.length > 32) return false
@@ -303,10 +297,9 @@ export function LaunchHost({
     if (creatorReserveBps < 0 || creatorReserveBps > CREATOR_RESERVE_BPS_MAX) {
       return false
     }
-    if (sidePoolBps < 0 || sidePoolBps > SIDE_POOL_BPS_MAX) return false
     if (delivery === 'vest' && vestDays <= 0) return false
     return true
-  }, [name, symbol, totalSupply, creatorReserveBps, sidePoolBps, delivery, vestDays])
+  }, [name, symbol, totalSupply, creatorReserveBps, delivery, vestDays])
 
   const checks: Check[] = useMemo(() => {
     const list: Check[] = []
@@ -366,7 +359,7 @@ export function LaunchHost({
         : 'unexpected pair configuration',
     })
 
-    if (createSidePool) {
+    if (defCreateSide === true) {
       const sideOk = Boolean(sideTokenRef && sideTokenRef !== zeroAddress)
       list.push({
         ok: sideOk,
@@ -418,7 +411,7 @@ export function LaunchHost({
     allowed.data,
     address,
     pairToken,
-    createSidePool,
+    defCreateSide,
     sideTokenRef,
     refConfigured.data,
     bufferWei,
@@ -467,10 +460,13 @@ export function LaunchHost({
 
   function buildParams(): ListingParams {
     if (!address) throw new Error('no address')
-    // Stamped fields: factory overwrites createSidePool/sidePoolBps/
-    // liquidityLocked/refPriceWad from DeployControls defaults at list/initCodeHash.
-    // ethUsdWad is caller-supplied on V3 — useLaunch reads currentEthUsdWad() and
-    // overlays it before mining (form value is a placeholder only).
+    // Protocol stamps (DeployControls → _stampListingParams): createSidePool,
+    // sidePoolBps, liquidityLocked, refPriceWad — overwritten on-chain; we send
+    // the live defaults so initCodeHash / client params match what the factory
+    // will stamp. ethUsdWad is caller-supplied on V3 (useLaunch overlays live).
+    const createSidePool = defCreateSide === true
+    const sidePoolBps = defSideBps ?? 0
+    const liquidityLocked = defLock === true
     return {
       startMcap: tier === '4k' ? TIER_4K : TIER_8K,
       totalSupply,
@@ -485,8 +481,8 @@ export function LaunchHost({
       createSidePool,
       sidePoolBps,
       liquidityLocked,
-      refPriceWad: 0n, // stamped when createSidePool
-      ethUsdWad: liveEthUsdWad ?? 0n, // useLaunch re-reads + overlays at run
+      refPriceWad: 0n,
+      ethUsdWad: liveEthUsdWad ?? 0n,
     }
   }
 
@@ -524,242 +520,333 @@ export function LaunchHost({
       {formOpen && !launch.receipt && (
         <Win95Window
           id="make_coin"
-          title="make_coin.exe"
-          width={480}
+          title="🛠 coin_wizard.exe — step 1 of 1 (we made it simple)"
+          width={920}
           onClose={onCloseForm}
         >
-          <div className={`launch-form ${!onCorrectChain ? 'disabled-surface' : ''}`}>
-            <label>
-              name
-              <input
-                value={name}
-                maxLength={32}
-                onChange={(e) => setName(e.target.value)}
-                disabled={!onCorrectChain}
-              />
-            </label>
-            <label>
-              symbol
-              <input
-                value={symbol}
-                maxLength={12}
-                onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-                disabled={!onCorrectChain}
-              />
-            </label>
-            <label>
-              total supply (tokens)
-              <input
-                value={supplyHuman}
-                onChange={(e) => setSupplyHuman(e.target.value.replace(/[^\d]/g, ''))}
-                disabled={!onCorrectChain}
-              />
-              <span className="hint">
-                raw: {totalSupply.toString()} · human:{' '}
-                {formatEther(totalSupply || DEFAULT_SUPPLY)}
-              </span>
-            </label>
+          <div className={`wizard-grid ${!onCorrectChain ? 'disabled-surface' : ''}`}>
+            <div className="launch-form">
+              <div className="seg" role="group" aria-label="launch route">
+                <button
+                  type="button"
+                  className="btn95 route-disabled"
+                  disabled
+                  title="ladder auctions are not open yet"
+                >
+                  <div>🔨 IPO (bookbuild) — market decide the price</div>
+                  <div className="s-d">ladder auctions are not open yet</div>
+                </button>
+                <button type="button" className="btn95 on" aria-pressed="true">
+                  <div>⚡ instant coin — you fund likwidity. live now</div>
+                  <div className="s-d">express listing · live on chain</div>
+                </button>
+              </div>
 
-            <fieldset disabled={!onCorrectChain}>
-              <legend>start mcap tier</legend>
-              <label className="row">
-                <input
-                  type="radio"
-                  checked={tier === '4k'}
-                  onChange={() => setTier('4k')}
-                />
-                $4,000
-              </label>
-              <label className="row">
-                <input
-                  type="radio"
-                  checked={tier === '8k'}
-                  onChange={() => setTier('8k')}
-                />
-                $8,000
-              </label>
-            </fieldset>
+              <div className="field95">
+                <span className="lab">ticker</span>
+                <div className="inset">
+                  <input
+                    value={symbol}
+                    maxLength={12}
+                    onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                    disabled={!onCorrectChain}
+                    placeholder="MOONBOI"
+                    style={{ textTransform: 'uppercase' }}
+                  />
+                </div>
+              </div>
+              <div className="field95">
+                <span className="lab">name of coin</span>
+                <div className="inset">
+                  <input
+                    value={name}
+                    maxLength={32}
+                    onChange={(e) => setName(e.target.value)}
+                    disabled={!onCorrectChain}
+                    placeholder="moon boi industries"
+                  />
+                </div>
+              </div>
+              <div className="field95">
+                <span className="lab">
+                  prospectus (one line. what is frens buying)
+                </span>
+                <div className="inset">
+                  <input
+                    value={declaredUseText}
+                    maxLength={64}
+                    onChange={(e) => setDeclaredUseText(e.target.value)}
+                    disabled={!onCorrectChain}
+                    placeholder="to the moon, obviosly."
+                  />
+                </div>
+                <span className="hint">
+                  only the hash of this line is recorded on-chain (calldata). the
+                  text itself is not stored — yet.
+                </span>
+              </div>
 
-            <label>
-              creator reserve (bps of total supply, 0–10000)
-              <input
-                type="number"
-                min={0}
-                max={CREATOR_RESERVE_BPS_MAX}
-                value={creatorReserveBps}
-                onChange={(e) => setCreatorReserveBps(Number(e.target.value))}
-                disabled={!onCorrectChain}
-              />
-            </label>
+              <div className="field95">
+                <span className="lab">token suply</span>
+                <p className="hint" style={{ margin: '0 0 6px' }}>
+                  supply: 100,000,000 (default)
+                </p>
+                <label className="row">
+                  <input
+                    type="checkbox"
+                    checked={customSupply}
+                    onChange={(e) => {
+                      setCustomSupply(e.target.checked)
+                      if (!e.target.checked) setSupplyHuman(DEFAULT_SUPPLY_HUMAN)
+                    }}
+                    disabled={!onCorrectChain}
+                  />
+                  custom suply
+                </label>
+                {customSupply && (
+                  <div className="inset" style={{ marginTop: 6 }}>
+                    <input
+                      value={supplyHuman}
+                      onChange={(e) =>
+                        setSupplyHuman(e.target.value.replace(/[^\d]/g, ''))
+                      }
+                      disabled={!onCorrectChain}
+                    />
+                    <span className="hint">
+                      raw: {totalSupply.toString()} · human:{' '}
+                      {formatEther(totalSupply || DEFAULT_SUPPLY)}
+                    </span>
+                  </div>
+                )}
+              </div>
 
-            <fieldset disabled={!onCorrectChain}>
-              <legend>delivery</legend>
-              <label className="row">
-                <input
-                  type="radio"
-                  checked={delivery === 'instant'}
-                  onChange={() => setDelivery('instant')}
-                />
-                INSTANT (10-minute timelock before claim)
-              </label>
-              <label className="row">
-                <input
-                  type="radio"
-                  checked={delivery === 'vest'}
-                  onChange={() => setDelivery('vest')}
-                />
-                VEST
-              </label>
-              {delivery === 'vest' && (
+              <fieldset disabled={!onCorrectChain}>
+                <legend>start mcap tier</legend>
+                <label className="row">
+                  <input
+                    type="radio"
+                    checked={tier === '4k'}
+                    onChange={() => setTier('4k')}
+                  />
+                  $4,000
+                </label>
+                <label className="row">
+                  <input
+                    type="radio"
+                    checked={tier === '8k'}
+                    onChange={() => setTier('8k')}
+                  />
+                  $8,000
+                </label>
+              </fieldset>
+
+              <details className="creator-fold">
+                <summary>creator settings ▸</summary>
                 <label>
-                  vest duration (days)
+                  creator reserve (bps of total supply, 0–10000)
                   <input
                     type="number"
-                    min={1}
-                    value={vestDays}
-                    onChange={(e) => setVestDays(Number(e.target.value))}
+                    min={0}
+                    max={CREATOR_RESERVE_BPS_MAX}
+                    value={creatorReserveBps}
+                    onChange={(e) =>
+                      setCreatorReserveBps(Number(e.target.value))
+                    }
+                    disabled={!onCorrectChain}
                   />
                 </label>
-              )}
-            </fieldset>
+                <fieldset disabled={!onCorrectChain}>
+                  <legend>delivery</legend>
+                  <label className="row">
+                    <input
+                      type="radio"
+                      checked={delivery === 'instant'}
+                      onChange={() => setDelivery('instant')}
+                    />
+                    INSTANT (10-minute timelock before claim)
+                  </label>
+                  <label className="row">
+                    <input
+                      type="radio"
+                      checked={delivery === 'vest'}
+                      onChange={() => setDelivery('vest')}
+                    />
+                    VEST
+                  </label>
+                  {delivery === 'vest' && (
+                    <label>
+                      vest duration (days)
+                      <input
+                        type="number"
+                        min={1}
+                        value={vestDays}
+                        onChange={(e) => setVestDays(Number(e.target.value))}
+                      />
+                    </label>
+                  )}
+                </fieldset>
+              </details>
 
-            <fieldset disabled={!onCorrectChain}>
-              <legend>side pool</legend>
-              <p className="hint">
-                factory stamps createSidePool / sidePoolBps / refPrice at list
-                (NOTES.md 0f). defaults loaded from chain; toggles follow those
-                stamped values.
-              </p>
-              <label className="row">
-                <input
-                  type="checkbox"
-                  checked={createSidePool}
-                  onChange={(e) => setCreateSidePool(e.target.checked)}
-                />
-                create side pool
-              </label>
-              <label>
-                side pool bps (0–2000)
-                <input
-                  type="number"
-                  min={0}
-                  max={SIDE_POOL_BPS_MAX}
-                  value={sidePoolBps}
-                  onChange={(e) => setSidePoolBps(Number(e.target.value))}
-                />
-              </label>
-            </fieldset>
-
-            <fieldset disabled={!onCorrectChain}>
-              <legend>liquidity lock</legend>
-              <label className="row">
-                <input
-                  type="checkbox"
-                  checked={liquidityLocked}
-                  onChange={(e) => setLiquidityLocked(e.target.checked)}
-                />
-                liquidity locked
-              </label>
-              <p className="hint">
-                {liquidityLocked
-                  ? 'locked forever — no principal withdraw path while stamp is true.'
-                  : 'creator can withdraw LP principal (unlockRecipient = creator).'}
-              </p>
-            </fieldset>
-
-            <label>
-              declared use (recorded in calldata only)
-              <input
-                value={declaredUseText}
-                maxLength={64}
-                onChange={(e) => setDeclaredUseText(e.target.value)}
-                disabled={!onCorrectChain}
-                placeholder="optional — keccak256(utf8) into bytes32"
-              />
-              <span className="hint">
-                not stored or emitted on Express; only in constructor calldata /
-                init-code hash.
-              </span>
-            </label>
-
-            {pairToken === zeroAddress && (
               <div className="pipeline">
-                <p>
-                  this launch sends {bufferWei.toString()} wei as a settle
-                  buffer (goes to the pool manager; measured, not guessed)
-                </p>
-                {gasEst && (
-                  <p className="hint">
-                    estimate total ≈ {formatEthSig(gasEst.requiredWei)} ETH
-                    (buffer {bufferWei.toString()} wei + gas ≈{' '}
-                    {formatEthSig(gasEst.gasCostWei)} ETH at current prices,
-                    1.5× gas margin)
-                  </p>
-                )}
-                {gasFetchFailed && (
-                  <p className="check bad">could not read gas price</p>
-                )}
-                {liveEthUsdWad !== null &&
-                  typeof factoryBandBps === 'bigint' && (
-                  <p className="hint">
-                    tier conversion at $
-                    {(Number(liveEthUsdWad) / 1e18).toFixed(2)}
-                    /ETH — you are filing this rate; the chain accepts it
-                    within ±{Number(factoryBandBps) / 100}% of its own
-                    reading.
-                  </p>
-                )}
-                {liveEthUsdWad === null && formOpen && (
-                  <p className="hint">
-                    reading live ETH/USD from the factory…
-                  </p>
-                )}
+                <p className="eyebrow">protocol terms (read from factory)</p>
                 <p className="hint">
-                  excess above actual consumption stays on the listing contract
-                  — the default carries ~10x margin, so worst-case excess is
-                  less than 1e6 wei.
+                  {/* Deployed Express:_stampListingParams overwrites createSidePool,
+                      sidePoolBps, liquidityLocked from DeployControls defaults. */}
+                  side pool:{' '}
+                  {defCreateSide === undefined
+                    ? '…'
+                    : defCreateSide
+                      ? `on, ${defSideBps ?? '…'} bps — set by protocol`
+                      : 'off — set by protocol'}
+                </p>
+                <p className="hint">
+                  liquidity:{' '}
+                  {defLock === undefined
+                    ? '…'
+                    : defLock
+                      ? 'locked forever — set by protocol'
+                      : 'unlockable — set by protocol'}
                 </p>
               </div>
-            )}
 
-            {vanityParityOk === false && (
-              <p className="check bad">
-                token vanity self-test failed — mining disabled. {vanityParityDetail}
-              </p>
-            )}
-
-            <button
-              type="button"
-              className="btn95 go"
-              disabled={!canSubmit || vanityParityOk === false}
-              onClick={() => void launch.run(buildParams())}
-            >
-              {busy ? 'working…' : 'mine + list'}
-            </button>
-
-            {(mining || launch.status || launch.mineStats || launch.selfTestLine || launch.error) && (
-              <div className={mining ? 'crt-mine' : 'pipeline'}>
-                {mining && (
-                  <p className="crt-line">
-                    TOKEN VANITY MINE · attempts {attempts ?? '…'}
+              {pairToken === zeroAddress && (
+                <div className="pipeline">
+                  <p>
+                    this launch sends {bufferWei.toString()} wei as a settle
+                    buffer (goes to the pool manager; measured, not guessed)
                   </p>
-                )}
-                {launch.status && <p className="status">{launch.status}</p>}
-                {launch.mineStats && !mining && (
-                  <p className="hint">{launch.mineStats}</p>
-                )}
-                {launch.mineStats && mining && (
-                  <p className="crt-line dim">{launch.mineStats}</p>
-                )}
-                {launch.selfTestLine && (
-                  <p className="hint">{launch.selfTestLine}</p>
-                )}
-                {vanityParityOk && vanityParityDetail && (
-                  <p className="hint">{vanityParityDetail}</p>
-                )}
-                {launch.error && <p className="check bad">{launch.error}</p>}
+                  {gasEst && (
+                    <p className="hint">
+                      estimate total ≈ {formatEthSig(gasEst.requiredWei)} ETH
+                      (buffer {bufferWei.toString()} wei + gas ≈{' '}
+                      {formatEthSig(gasEst.gasCostWei)} ETH at current prices,
+                      1.5× gas margin)
+                    </p>
+                  )}
+                  {gasFetchFailed && (
+                    <p className="check bad">could not read gas price</p>
+                  )}
+                  {liveEthUsdWad !== null &&
+                    typeof factoryBandBps === 'bigint' && (
+                      <p className="hint">
+                        tier conversion at $
+                        {(Number(liveEthUsdWad) / 1e18).toFixed(2)}
+                        /ETH — you are filing this rate; the chain accepts it
+                        within ±{Number(factoryBandBps) / 100}% of its own
+                        reading.
+                      </p>
+                    )}
+                </div>
+              )}
+
+              {vanityParityOk === false && (
+                <p className="check bad">
+                  token vanity self-test failed — mining disabled.{' '}
+                  {vanityParityDetail}
+                </p>
+              )}
+
+              <button
+                type="button"
+                className="btn95 big go"
+                disabled={!canSubmit || vanityParityOk === false}
+                onClick={() => void launch.run(buildParams())}
+              >
+                {busy ? 'working…' : 'MAKE THE COIN ☝'}
+              </button>
+
+              {(mining ||
+                launch.status ||
+                launch.mineStats ||
+                launch.selfTestLine ||
+                launch.error) && (
+                <div className={mining ? 'crt-mine' : 'pipeline'}>
+                  {mining && (
+                    <p className="crt-line">
+                      TOKEN VANITY MINE · attempts {attempts ?? '…'}
+                    </p>
+                  )}
+                  {launch.status && <p className="status">{launch.status}</p>}
+                  {launch.mineStats && !mining && (
+                    <p className="hint">{launch.mineStats}</p>
+                  )}
+                  {launch.mineStats && mining && (
+                    <p className="crt-line dim">{launch.mineStats}</p>
+                  )}
+                  {launch.selfTestLine && (
+                    <p className="hint">{launch.selfTestLine}</p>
+                  )}
+                  {vanityParityOk && vanityParityDetail && (
+                    <p className="hint">{vanityParityDetail}</p>
+                  )}
+                  {launch.error && (
+                    <p className="check bad">{launch.error}</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="win static-win">
+              <div className="title">📜 terms.txt (do read)</div>
+              <div className="body95">
+                <div className="dr">
+                  <span>supply</span>
+                  <b>
+                    {customSupply
+                      ? 'you choose'
+                      : '100,000,000 (default)'}
+                  </b>
+                </div>
+                <div className="dr">
+                  <span>presale</span>
+                  <b className="up">no. never. is fair launch</b>
+                </div>
+                <div className="dr">
+                  <span>team bags</span>
+                  <b className={creatorReserveBps === 0 ? 'up' : undefined}>
+                    {creatorReserveBps === 0
+                      ? 'no bags for team'
+                      : `${creatorReserveBps} bps reserve`}
+                  </b>
+                </div>
+                <div className="dr">
+                  <span>side pool</span>
+                  <b>
+                    {defCreateSide === undefined
+                      ? '…'
+                      : defCreateSide
+                        ? `${defSideBps ?? '…'} bps (protocol)`
+                        : 'off (protocol)'}
+                  </b>
+                </div>
+                <div className="dr">
+                  <span>LP</span>
+                  <b>
+                    {defLock === undefined
+                      ? '…'
+                      : defLock
+                        ? 'locked 🔒 forever'
+                        : 'unlockable (protocol)'}
+                  </b>
+                </div>
+                <div className="dr">
+                  <span>settle buffer</span>
+                  <b>{bufferWei.toString()} wei</b>
+                </div>
+                <div className="dr">
+                  <span>tier conversion</span>
+                  <b>
+                    {liveEthUsdWad != null
+                      ? `$${(Number(liveEthUsdWad) / 1e18).toFixed(2)}/ETH`
+                      : '…'}
+                  </b>
+                </div>
+                <p className="hint" style={{ textAlign: 'left' }}>
+                  instant coin: protocol stamps side pool + LP lock. is honest,
+                  not scary.
+                </p>
               </div>
-            )}
+            </div>
           </div>
         </Win95Window>
       )}

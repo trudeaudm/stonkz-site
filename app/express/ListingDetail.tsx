@@ -20,6 +20,8 @@ import {
   formatStampedEthUsdLine,
   isV2UsdStamp,
 } from './listingDisplay'
+import { formatUsdSpot } from '../prices/spotMath'
+import { useMainPoolSpot } from '../prices/useMainPoolSpot'
 
 function short(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
@@ -177,6 +179,8 @@ export function TokenWindow({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh on open only
   }, [listing, record?.listing])
 
+  const spot = useMainPoolSpot(record, Boolean(record) && !loading && !err)
+
   const title = record
     ? `${record.symbol.toLowerCase()}.exe`
     : 'token.exe'
@@ -268,6 +272,15 @@ export function TokenWindow({
             <p>start price {record.startPriceWad} wad (at launch)</p>
           )}
         </>
+      )}
+      {spot && (
+        <div className="dr">
+          <span>main pool spot</span>
+          <b>
+            {formatUsdSpot(spot.usdPerToken)} @ stamped rate ($
+            {spot.stampedEthUsd.toFixed(2)}/ETH)
+          </b>
+        </div>
       )}
       <p>total supply {record.totalSupply} raw</p>
       <div className="rule" />
