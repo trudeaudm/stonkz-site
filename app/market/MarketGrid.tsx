@@ -81,6 +81,11 @@ export function TokenCard({
           </div>
           <div className="nm">{factsLine(listing)}</div>
         </div>
+        <div
+          className="spark"
+          aria-hidden
+          title="spark wakes when trades index"
+        />
         {spot && (
           <div>
             <div className="px">{formatUsdSpot(spot.usdPerToken)}</div>

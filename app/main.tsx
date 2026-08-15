@@ -4,7 +4,13 @@ import { createRoot } from 'react-dom/client'
 import { WagmiProvider } from 'wagmi'
 import { App } from './App'
 import { wagmiConfig } from './config/wagmi'
+import { confetti } from './shell/confetti'
 import './styles.css'
+
+if (import.meta.env.DEV) {
+  ;(window as unknown as { __stonkzConfetti?: typeof confetti }).__stonkzConfetti =
+    confetti
+}
 
 const queryClient = new QueryClient()
 const root = document.getElementById('root')

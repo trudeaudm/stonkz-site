@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getAddress, type Address } from 'viem'
-import { usePublicClient } from 'wagmi'
+import { formatEther, getAddress, type Address } from 'viem'
+import { useAccount, usePublicClient, useReadContract } from 'wagmi'
 import { directListingAbi } from '../abi/directListing'
+import { launchTokenAbi } from '../abi/launchToken'
 import { env } from '../config/env'
+import { FlexCard } from '../shell/FlexCard'
 import { Stamp } from '../shell/Stamp'
 import { Win95Window } from '../shell/Window'
 import { useWindowManager } from '../shell/windowManager'
@@ -64,6 +66,7 @@ export function TokenWindow({
   onClose: () => void
 }) {
   const client = usePublicClient()
+  const { address } = useAccount()
   const { open } = useWindowManager()
   const factory = env.addrExpressFactory
   const [record, setRecord] = useState<IndexedListing | null>(null)
@@ -205,6 +208,16 @@ export function TokenWindow({
 
   // Hooks before any early return — spot must stay ordered.
   const spot = useMainPoolSpot(record, Boolean(record) && !loading && !err)
+
+  const { data: holderBal } = useReadContract({
+    address: record?.token,
+    abi: launchTokenAbi,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    query: {
+      enabled: Boolean(record?.token && address),
+    },
+  })
 
   const title = record
     ? `${record.symbol.toLowerCase()}.exe — on the market`
@@ -417,6 +430,24 @@ export function TokenWindow({
           </div>
         </div>
       </div>
+
+      {typeof holderBal === 'bigint' && holderBal > 0n && (
+        <div className="win" style={{ marginTop: 12 }}>
+          <div className="title">📸 your bag flex</div>
+          <div className="body95">
+            <FlexCard
+              symbol={record.symbol}
+              deltaPct={spot?.deltaPct ?? null}
+              valueUsd={
+                spot
+                  ? Number(formatEther(holderBal)) * spot.usdPerToken
+                  : null
+              }
+              coins={Number(formatEther(holderBal))}
+            />
+          </div>
+        </div>
+      )}
 
       <div className="btn-row" style={{ marginTop: 10 }}>
         <button type="button" className="btn95" onClick={() => void refresh()}>

@@ -16,6 +16,7 @@ export type WinId =
   | 'certificate'
   | 'account'
   | 'my_stuff'
+  | 'forum'
   | `token:${string}`
 
 export type WinDef = {

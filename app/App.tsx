@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getAddress, isAddress, type Address } from 'viem'
+import { ForumList, ForumThread } from './forum/ForumView'
 import { LaunchHost } from './express/LaunchForm'
 import { TokenWindow } from './express/ListingDetail'
 import { ChainGuard } from './gate/ChainGuard'
 import { GateScreen } from './gate/GateScreen'
 import { ActivityLogDock } from './market/ActivityLogDock'
 import { HeroHeadline } from './market/HeroHeadline'
+import { LeagueTeaser } from './market/LeagueTeaser'
 import { MarketGrid } from './market/MarketGrid'
 import { MarketHeader } from './market/MarketHeader'
 import { SonarQuiet } from './market/SonarQuiet'
@@ -26,6 +28,8 @@ type Route =
   | { name: 'home' }
   | { name: 'make' }
   | { name: 'me' }
+  | { name: 'forum' }
+  | { name: 'thread'; id: string }
   | { name: 'detail'; listing: Address }
 
 function parseHash(): Route {
@@ -49,6 +53,10 @@ function parseHash(): Route {
 
   if (parts[0] === 'make') return { name: 'make' }
   if (parts[0] === 'me') return { name: 'me' }
+  if (parts[0] === 'forum') return { name: 'forum' }
+  if (parts[0] === 'thread' && parts[1]) {
+    return { name: 'thread', id: parts[1] }
+  }
   if (parts[0] === 'tok' && parts[1] && isAddress(parts[1])) {
     return { name: 'detail', listing: getAddress(parts[1]) }
   }
@@ -59,11 +67,13 @@ function navigate(route: Route) {
   if (route.name === 'home') window.location.hash = '#/'
   else if (route.name === 'make') window.location.hash = '#/make'
   else if (route.name === 'me') window.location.hash = '#/me'
+  else if (route.name === 'forum') window.location.hash = '#/forum'
+  else if (route.name === 'thread') window.location.hash = `#/thread/${route.id}`
   else window.location.hash = `#/tok/${route.listing}`
 }
 
 function MarketPage() {
-  const { open, close, isOpen, isVisible, windows } = useWindowManager()
+  const { open, close, isOpen, isVisible } = useWindowManager()
   const [route, setRoute] = useState<Route>(() =>
     typeof window === 'undefined' ? { name: 'home' } : parseHash(),
   )
@@ -76,6 +86,7 @@ function MarketPage() {
         close('precheck')
       }
       if (r.name !== 'me') close('my_stuff')
+      if (r.name !== 'forum' && r.name !== 'thread') close('forum')
 
       if (r.name === 'make') {
         open('make_coin', 'make_coin.exe')
@@ -86,6 +97,12 @@ function MarketPage() {
         })
       } else if (r.name === 'me') {
         open('my_stuff', 'my_stuff.exe')
+        setTokenListing((prev) => {
+          if (prev) close(`token:${prev}` as WinId)
+          return null
+        })
+      } else if (r.name === 'forum' || r.name === 'thread') {
+        open('forum', 'stonkz_forum.exe')
         setTokenListing((prev) => {
           if (prev) close(`token:${prev}` as WinId)
           return null
@@ -118,28 +135,7 @@ function MarketPage() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [syncFromRoute])
 
-  useEffect(() => {
-    if (route.name === 'make' && !isOpen('make_coin') && !isOpen('precheck') && !isOpen('certificate')) {
-      if (window.location.hash.startsWith('#/make')) {
-        navigate({ name: 'home' })
-        setRoute({ name: 'home' })
-      }
-    }
-    if (route.name === 'me' && !isOpen('my_stuff')) {
-      if (window.location.hash.startsWith('#/me')) {
-        navigate({ name: 'home' })
-        setRoute({ name: 'home' })
-      }
-    }
-    if (route.name === 'detail' && tokenListing) {
-      const id = `token:${tokenListing}` as WinId
-      if (!isOpen(id) && window.location.hash.startsWith('#/tok/')) {
-        navigate({ name: 'home' })
-        setRoute({ name: 'home' })
-        setTokenListing(null)
-      }
-    }
-  }, [windows, route, isOpen, tokenListing])
+  // Window × handlers navigate home; do not race-redirect when open() is mid-flight.
 
   const goMake = useCallback(() => {
     open('make_coin', 'make_coin.exe')
@@ -154,6 +150,12 @@ function MarketPage() {
     setRoute({ name: 'me' })
   }, [open])
 
+  const goForum = useCallback(() => {
+    open('forum', 'stonkz_forum.exe')
+    navigate({ name: 'forum' })
+    setRoute({ name: 'forum' })
+  }, [open])
+
   const openToken = useCallback(
     (listing: Address) => {
       setTokenListing(listing)
@@ -164,6 +166,12 @@ function MarketPage() {
     [open],
   )
 
+  const closeForum = useCallback(() => {
+    close('forum')
+    navigate({ name: 'home' })
+    setRoute({ name: 'home' })
+  }, [close])
+
   return (
     <div className="market-page">
       <Scenery />
@@ -171,6 +179,7 @@ function MarketPage() {
         <MarketHeader
           onMakeCoin={goMake}
           onMyStuff={goMe}
+          onForum={goForum}
           onAccount={() => {
             if (isOpen('account')) close('account')
             else open('account', 'account.exe')
@@ -182,7 +191,12 @@ function MarketPage() {
         <DeskShelf />
         <div className="grid2">
           <MarketGrid onOpen={openToken} />
-          <SonarQuiet />
+          <div>
+            <SonarQuiet />
+            <div style={{ marginTop: 12 }}>
+              <LeagueTeaser />
+            </div>
+          </div>
         </div>
         <footer>
           S T O N K Z · stonkz.green · gated build · every number on this page
@@ -237,6 +251,12 @@ function MarketPage() {
                 setRoute({ name: 'home' })
               }}
             />
+          )}
+          {isOpen('forum') && route.name === 'thread' && (
+            <ForumThread id={route.id} onClose={closeForum} />
+          )}
+          {isOpen('forum') && route.name === 'forum' && (
+            <ForumList onClose={closeForum} />
           )}
           {isOpen('account') && (
             <AccountWindow onClose={() => close('account')} />

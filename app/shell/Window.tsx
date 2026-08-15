@@ -17,7 +17,6 @@ export function Win95Window({
   onClose?: () => void
   width?: number
 }) {
-  void _onClose
   const { windows, focus, iconize, move, savePos } = useWindowManager()
   const win = windows.find((w) => w.id === id)
   const drag = useRef<{
@@ -98,17 +97,44 @@ export function Win95Window({
           <span className="mw-title-text">{title}</span>
         </button>
         <span className="wbtns">
-          <button
-            type="button"
-            className="x"
-            title="iconize"
-            onClick={(e) => {
-              e.stopPropagation()
-              iconize(id)
-            }}
-          >
-            ×
-          </button>
+          {_onClose ? (
+            <>
+              <button
+                type="button"
+                className="tbtn"
+                title="iconize"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  iconize(id)
+                }}
+              >
+                ＿
+              </button>
+              <button
+                type="button"
+                className="x"
+                title="close"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  _onClose()
+                }}
+              >
+                ×
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="x"
+              title="iconize"
+              onClick={(e) => {
+                e.stopPropagation()
+                iconize(id)
+              }}
+            >
+              ×
+            </button>
+          )}
         </span>
       </div>
       <div className="body95">{children}</div>

@@ -4,6 +4,7 @@ function glyph(id: WinId): string {
   if (id === 'make_coin') return '📈'
   if (id === 'precheck') return '✅'
   if (id === 'my_stuff') return '🧍'
+  if (id === 'forum') return '💬'
   if (id === 'account') return '👛'
   if (id === 'certificate') return '📜'
   if (id === 'activity_log') return '🖥'
@@ -16,6 +17,7 @@ function routeFor(id: WinId): string | null {
     return '#/make'
   }
   if (id === 'my_stuff') return '#/me'
+  if (id === 'forum') return '#/forum'
   if (id.startsWith('token:')) {
     return `#/tok/${id.slice('token:'.length)}`
   }

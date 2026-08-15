@@ -9,10 +9,12 @@ function short(addr: string) {
 export function MarketHeader({
   onMakeCoin,
   onMyStuff,
+  onForum,
   onAccount,
 }: {
   onMakeCoin: () => void
   onMyStuff: () => void
+  onForum: () => void
   onAccount: () => void
 }) {
   const { address, isConnected } = useAccount()
@@ -55,6 +57,9 @@ export function MarketHeader({
         </button>
         <button type="button" className="btn95" onClick={onMyStuff}>
           🧍 my stuff
+        </button>
+        <button type="button" className="btn95" onClick={onForum}>
+          💬 forum
         </button>
         <button
           type="button"
