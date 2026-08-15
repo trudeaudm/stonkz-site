@@ -45,6 +45,8 @@ export type IndexedListing = {
   createSidePool: boolean
   sidePoolBps: number
   mainPoolKey: MainPoolKey
+  /** Present when createSidePool and sideKey() answered. */
+  sidePoolKey?: MainPoolKey
   // mutable — refetch on detail open
   sidePoolDeployed: boolean
   hydratedAt: number
@@ -59,6 +61,63 @@ export type IndexedListing = {
   hydrateError?: string
 }
 
+/** One decoded PoolManager Swap (serializable). */
+export type IndexedSwap = {
+  blockNumber: string
+  logIndex: number
+  txHash: Hex
+  sender: Address
+  amount0: string
+  amount1: string
+  sqrtPriceX96: string
+  liquidity: string
+  tick: number
+  fee: number
+  /** Lazy-filled for cost-basis (tx.from). */
+  txFrom?: Address
+}
+
+/**
+ * Cap stored raw events per pool: keep all if under RAW_SWAP_SOFT_CAP;
+ * else keep bucketed series + trailing RAW_SWAP_TRAIL raw.
+ * (see applySwapCap in swaps.ts)
+ */
+export const RAW_SWAP_SOFT_CAP = 5000
+export const RAW_SWAP_TRAIL = 500
+
+export type SwapPriceBucket = {
+  block: string
+  sqrtPriceX96: string
+}
+
+export type PoolSwapStore = {
+  poolId: Hex
+  listing: Address
+  kind: 'main' | 'side'
+  key: MainPoolKey
+  /** Next block to scan (inclusive). Advances ONLY after decode+persist. */
+  cursor: string
+  fromBlock: string
+  events: IndexedSwap[]
+  /** Populated when raw events were capped past RAW_SWAP_SOFT_CAP. */
+  buckets?: SwapPriceBucket[]
+  lastSwapBlock: string
+  lastSqrtPriceX96: string
+  swapCount: number
+  /** Gross |token-side| volume in raw token units. */
+  volumeTokenRaw: string
+  /** Gross |pair-side| volume in raw pair units (ETH wei or USDG base units). */
+  volumePairRaw: string
+}
+
+export type ListingSwapMeta = {
+  listing: Address
+  mainPoolId: Hex
+  sidePoolId?: Hex
+  /** Pool with higher lastSwapBlock; main if neither has swapped. */
+  activePool: 'main' | 'side'
+}
+
 export type IndexEnvelope = {
   v: 2
   chainId: number
@@ -67,6 +126,10 @@ export type IndexEnvelope = {
   fromBlock: string
   listings: IndexedListing[]
   updatedAt: number
+  /** swaps:<poolId> — keyed by lowercase poolId hex. */
+  swaps?: Record<string, PoolSwapStore>
+  /** listing → pool association + activePool. */
+  listingSwapMeta?: Record<string, ListingSwapMeta>
 }
 
 export type ScanProgress = {

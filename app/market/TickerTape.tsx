@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { usePublicClient } from 'wagmi'
+import { expressFactoryAbi } from '../abi/expressFactory'
 import { v4AdapterAbi } from '../abi/v4Adapter'
 import { env } from '../config/env'
 import type { IndexedListing } from '../indexer/types'
 import {
   ethPerTokenFromSlot0,
-  ethPerTokenFromStartPriceWad,
   formatUsdSpot,
   poolIdFromKey,
+  startUsdPerTokenFromMcap,
+  usdPerTokenFromSideSlot0,
 } from '../prices/spotMath'
 import { useIndex } from '../shell/IndexProvider'
 
@@ -24,57 +26,70 @@ function tierLabel(startMcap: string): string {
   return 'custom tier'
 }
 
-/** Batch-read spots for tape (shared interval). */
+/** Batch-read spots for tape from each listing's ACTIVE pool. */
 function useTapeSpots(listings: IndexedListing[]): Map<string, TapeSpot> {
   const client = usePublicClient()
+  const { envelope } = useIndex()
   const [map, setMap] = useState<Map<string, TapeSpot>>(() => new Map())
 
   useEffect(() => {
     const adapter = env.addrV4Adapter
+    const factory = env.addrExpressFactory
     if (!client || !adapter || listings.length === 0) {
       setMap(new Map())
       return
     }
     let cancelled = false
     const read = async () => {
+      let liveEth = 0n
+      if (factory) {
+        try {
+          liveEth = await client.readContract({
+            address: factory,
+            abi: expressFactoryAbi,
+            functionName: 'currentEthUsdWad',
+          })
+        } catch (err) {
+          console.error(
+            '[tape] currentEthUsdWad',
+            err instanceof Error ? err.message : err,
+          )
+        }
+      }
+      const liveRate = Number(liveEth) / 1e18
       const next = new Map<string, TapeSpot>()
       await Promise.all(
         listings
           .filter((L) => !L.hydrateError)
           .map(async (L) => {
             try {
-              let ethUsd =
-                L.ethUsdWad != null && L.ethUsdWad !== '0'
-                  ? BigInt(L.ethUsdWad)
-                  : 0n
-              if (ethUsd === 0n) {
-                ethUsd = await client.readContract({
-                  address: L.listing,
-                  abi: [
-                    {
-                      type: 'function',
-                      name: 'ethUsdWad',
-                      stateMutability: 'view',
-                      inputs: [],
-                      outputs: [{ type: 'uint256' }],
-                    },
-                  ] as const,
-                  functionName: 'ethUsdWad',
-                })
-              }
-              if (ethUsd === 0n) return
+              const meta = envelope?.listingSwapMeta?.[L.listing.toLowerCase()]
+              const active = meta?.activePool ?? 'main'
+              const key =
+                active === 'side' && L.sidePoolKey
+                  ? L.sidePoolKey
+                  : L.mainPoolKey
+              if (active === 'side' && !L.sidePoolKey) return
+
               const [sqrt] = await client.readContract({
                 address: adapter,
                 abi: v4AdapterAbi,
                 functionName: 'getSlot0',
-                args: [poolIdFromKey(L.mainPoolKey)],
+                args: [poolIdFromKey(key)],
               })
               if (sqrt === 0n) return
-              const ethPer = ethPerTokenFromSlot0(sqrt, L.mainPoolKey)
-              const rate = Number(ethUsd) / 1e18
-              const usd = ethPer * rate
-              const startUsd =
-                ethPerTokenFromStartPriceWad(L.startPriceWad) * rate
+
+              let usd: number
+              if (active === 'side') {
+                usd = usdPerTokenFromSideSlot0(sqrt, key, L.token)
+              } else {
+                if (liveRate <= 0) return
+                usd = ethPerTokenFromSlot0(sqrt, key) * liveRate
+              }
+              const startUsd = startUsdPerTokenFromMcap(
+                L.startMcap,
+                L.totalSupply,
+              )
               const deltaPct =
                 startUsd > 0 ? ((usd - startUsd) / startUsd) * 100 : 0
               if (Number.isFinite(usd) && usd > 0) {
@@ -97,7 +112,7 @@ function useTapeSpots(listings: IndexedListing[]): Map<string, TapeSpot> {
       cancelled = true
       window.clearInterval(id)
     }
-  }, [client, listings])
+  }, [client, envelope, listings])
 
   return map
 }

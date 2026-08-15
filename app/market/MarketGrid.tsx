@@ -1,7 +1,11 @@
 import { getAddress, type Address } from 'viem'
 import type { IndexedListing } from '../indexer/types'
+import { Sparkline } from '../prices/ChartSvg'
 import { formatUsdSpot } from '../prices/spotMath'
-import { useMainPoolSpot } from '../prices/useMainPoolSpot'
+import {
+  useListingSpot,
+  usePriceSeries,
+} from '../prices/useMainPoolSpot'
 import { Stamp } from '../shell/Stamp'
 import { StaticWin } from '../shell/StaticWin'
 import { useIndex } from '../shell/IndexProvider'
@@ -33,7 +37,8 @@ export function TokenCard({
   listing: IndexedListing
   onOpen: (listing: Address) => void
 }) {
-  const spot = useMainPoolSpot(listing, !listing.hydrateError)
+  const spot = useListingSpot(listing, !listing.hydrateError)
+  const series = usePriceSeries(listing, spot?.liveEthUsd ?? null)
 
   if (listing.hydrateError) {
     return (
@@ -81,11 +86,15 @@ export function TokenCard({
           </div>
           <div className="nm">{factsLine(listing)}</div>
         </div>
-        <div
-          className="spark"
-          aria-hidden
-          title="spark wakes when trades index"
-        />
+        {series.length >= 2 ? (
+          <Sparkline series={series} />
+        ) : (
+          <div
+            className="spark"
+            aria-hidden
+            title="spark wakes when trades index"
+          />
+        )}
         {spot && (
           <div>
             <div className="px">{formatUsdSpot(spot.usdPerToken)}</div>

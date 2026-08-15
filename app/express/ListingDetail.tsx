@@ -11,13 +11,25 @@ import { useWindowManager } from '../shell/windowManager'
 import { hydrateListingByAddress, refreshMutable } from '../indexer/hydrate'
 import { loadEnvelope, saveEnvelope } from '../indexer/storage'
 import type { IndexedListing } from '../indexer/types'
+import { useIndex } from '../shell/IndexProvider'
 import {
   formatEthUsdRate,
   formatStampedEthUsdLine,
   isV2UsdStamp,
 } from './listingDisplay'
-import { formatDeltaPct, formatUsdSpot } from '../prices/spotMath'
-import { useMainPoolSpot } from '../prices/useMainPoolSpot'
+import { ZigChart } from '../prices/ChartSvg'
+import { useCostBasis } from '../prices/useCostBasis'
+import {
+  formatDeltaPct,
+  formatMcapUsd,
+  formatUsdSpot,
+  pairVolumeUsd,
+} from '../prices/spotMath'
+import {
+  useActiveSwapStore,
+  useListingSpot,
+  usePriceSeries,
+} from '../prices/useMainPoolSpot'
 
 function short(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
@@ -27,7 +39,6 @@ function explorer(path: string) {
   return `${env.explorerUrl.replace(/\/$/, '')}/${path}`
 }
 
-/** Optional Dexscreener base — never invent a chain-specific URL. */
 function dexscreenerTokenUrl(token: string): string | null {
   const base = import.meta.env.VITE_DEXSCREENER_URL
   if (base == null || String(base).trim() === '') return null
@@ -58,6 +69,15 @@ function reserveBpsOrRaw(record: IndexedListing): string {
   return `${reserve.toString()} raw`
 }
 
+function relativeBlocks(last: string, head: bigint | undefined): string {
+  if (!head || last === '0') return '—'
+  const ago = head - BigInt(last)
+  if (ago <= 0n) return 'just now'
+  if (ago < 100n) return `${ago.toString()} blocks ago`
+  if (ago < 10_000n) return `${ago.toString()} blocks ago`
+  return `block ${last}`
+}
+
 export function TokenWindow({
   listing,
   onClose,
@@ -68,6 +88,7 @@ export function TokenWindow({
   const client = usePublicClient()
   const { address } = useAccount()
   const { open } = useWindowManager()
+  const { progress } = useIndex()
   const factory = env.addrExpressFactory
   const [record, setRecord] = useState<IndexedListing | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -206,8 +227,9 @@ export function TokenWindow({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh on open only
   }, [listing, record?.listing])
 
-  // Hooks before any early return — spot must stay ordered.
-  const spot = useMainPoolSpot(record, Boolean(record) && !loading && !err)
+  const spot = useListingSpot(record, Boolean(record) && !loading && !err)
+  const series = usePriceSeries(record, spot?.liveEthUsd ?? null)
+  const swapStore = useActiveSwapStore(record)
 
   const { data: holderBal } = useReadContract({
     address: record?.token,
@@ -218,6 +240,13 @@ export function TokenWindow({
       enabled: Boolean(record?.token && address),
     },
   })
+
+  const basis = useCostBasis(
+    record,
+    address,
+    typeof holderBal === 'bigint' ? holderBal : undefined,
+    spot?.liveEthUsd ?? null,
+  )
 
   const title = record
     ? `${record.symbol.toLowerCase()}.exe — on the market`
@@ -255,6 +284,24 @@ export function TokenWindow({
     : record.sidePoolDeployed
       ? `${record.sidePoolBps} bps · deployed`
       : `${record.sidePoolBps} bps · pending`
+
+  const volUsd =
+    swapStore != null
+      ? pairVolumeUsd(
+          swapStore.volumePairRaw,
+          swapStore.kind,
+          spot?.liveEthUsd ?? null,
+        )
+      : null
+  const swapCount = swapStore?.swapCount ?? 0
+  const flexDelta =
+    basis != null && spot
+      ? ((spot.usdPerToken - basis.avgCostUsd) / basis.avgCostUsd) * 100
+      : (spot?.deltaPct ?? null)
+  const flexSubtitle =
+    basis != null
+      ? `got at ${formatUsdSpot(basis.avgCostUsd)} avg${basis.partial ? ' · partial — swaps only' : ''} · now ${formatUsdSpot(spot?.usdPerToken ?? 0)}`
+      : undefined
 
   return (
     <Win95Window
@@ -309,7 +356,18 @@ export function TokenWindow({
         </div>
       ) : (
         <div className="hint" style={{ marginBottom: 6 }}>
-          spot wakes when the main pool answers.
+          spot wakes when the active pool answers.
+        </div>
+      )}
+
+      {spot && (
+        <div className="mono" style={{ fontSize: 12, marginBottom: 6 }}>
+          mcap now {formatMcapUsd(spot.mcapNow)} · start tier{' '}
+          {formatMcapUsd(Number(BigInt(record.startMcap)) / 1e18)} · via{' '}
+          {spot.activePool} pool
+          {spot.activePool === 'main' && spot.liveEthUsd != null
+            ? ` @ live rate`
+            : ''}
         </div>
       )}
 
@@ -317,21 +375,31 @@ export function TokenWindow({
         <p className="hint">not yet indexed — reading directly from chain</p>
       )}
 
-      <div
-        className="zig"
-        style={{
-          marginTop: 8,
-          minHeight: 72,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 12,
-        }}
-      >
-        <span className="hint" style={{ margin: 0 }}>
-          chart wakes when trades index.
-        </span>
-      </div>
+      {swapCount === 0 || series.length === 0 ? (
+        <div
+          className="zig"
+          style={{
+            marginTop: 8,
+            minHeight: 72,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 12,
+          }}
+        >
+          <span className="hint" style={{ margin: 0 }}>
+            chart wakes when trades index.
+          </span>
+        </div>
+      ) : (
+        <div style={{ marginTop: 8 }}>
+          <ZigChart
+            series={series}
+            startUsd={spot?.startUsdPerToken ?? 0}
+            height={140}
+          />
+        </div>
+      )}
 
       <div className="win" style={{ marginTop: 12 }}>
         <div className="title">🔍 recon.exe — is coin ok?</div>
@@ -355,6 +423,28 @@ export function TokenWindow({
             <b>{sideLabel}</b>
           </div>
           <div className="dr">
+            <span>mcap now</span>
+            <b className="mono">
+              {spot ? formatMcapUsd(spot.mcapNow) : '—'}
+            </b>
+          </div>
+          <div className="dr">
+            <span>volume</span>
+            <b>
+              {volUsd != null
+                ? `${formatUsdSpot(volUsd)} gross (${swapStore?.kind === 'side' ? 'USDG' : 'ETH'} side)`
+                : '—'}
+            </b>
+          </div>
+          <div className="dr">
+            <span>last trade</span>
+            <b>
+              {swapStore && swapStore.lastSwapBlock !== '0'
+                ? `block ${swapStore.lastSwapBlock} · ${relativeBlocks(swapStore.lastSwapBlock, progress?.head)}`
+                : '—'}
+            </b>
+          </div>
+          <div className="dr">
             <span>stamped $rate</span>
             <b>
               {!ethUsdResolved
@@ -364,12 +454,20 @@ export function TokenWindow({
                   : 'no stamp (v1 / unread)'}
             </b>
           </div>
-          {v2Usd && ethUsdWad != null && spot && (
+          {spot && spot.activePool === 'main' && spot.liveEthUsd != null && (
             <div className="dr">
-              <span>spot @ stamp</span>
+              <span>spot @ live rate</span>
               <b>
                 {formatUsdSpot(spot.usdPerToken)} ($
-                {formatEthUsdRate(ethUsdWad)}/ETH)
+                {spot.liveEthUsd.toFixed(0)}/ETH)
+              </b>
+            </div>
+          )}
+          {v2Usd && ethUsdWad != null && spot && spot.activePool === 'side' && (
+            <div className="dr">
+              <span>filing stamp</span>
+              <b>
+                ${formatEthUsdRate(ethUsdWad)}/ETH (history — spot via USDG)
               </b>
             </div>
           )}
@@ -437,13 +535,14 @@ export function TokenWindow({
           <div className="body95">
             <FlexCard
               symbol={record.symbol}
-              deltaPct={spot?.deltaPct ?? null}
+              deltaPct={flexDelta}
               valueUsd={
                 spot
                   ? Number(formatEther(holderBal)) * spot.usdPerToken
                   : null
               }
               coins={Number(formatEther(holderBal))}
+              subtitle={flexSubtitle}
             />
           </div>
         </div>

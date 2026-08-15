@@ -96,6 +96,7 @@ const HYDRATE_LABELS = [
   'sidePoolBps',
   'sidePoolDeployed',
   'mainKey',
+  'sideKey',
   'name',
   'symbol',
   'ethUsdWad',
@@ -131,6 +132,7 @@ function hydrateContracts(logs: FreshExpressLog[]) {
       functionName: 'sidePoolDeployed' as const,
     },
     { address: L.listing, abi: directListingAbi, functionName: 'mainKey' as const },
+    { address: L.listing, abi: directListingAbi, functionName: 'sideKey' as const },
     { address: L.token, abi: launchTokenAbi, functionName: 'name' as const },
     { address: L.token, abi: launchTokenAbi, functionName: 'symbol' as const },
     { address: L.listing, abi: directListingAbi, functionName: 'ethUsdWad' as const },
@@ -183,8 +185,10 @@ export async function hydrateListings(
   for (let i = 0; i < logs.length; i++) {
     const base = i * STRIDE
     const L = logs[i]
-    // ethUsdWad is optional (V1 listings revert) — exclude from required check
-    const requiredLabels = HYDRATE_LABELS.slice(0, -1)
+    // ethUsdWad + sideKey are optional — exclude from required check
+    const requiredLabels = HYDRATE_LABELS.filter(
+      (l) => l !== 'ethUsdWad' && l !== 'sideKey',
+    )
     const err = fieldError(results, base, [...requiredLabels])
     if (err) {
       out.push(unreadableCard(L, err))
@@ -214,11 +218,21 @@ export async function hydrateListings(
       tickSpacing: number
       hooks: Address
     }
-    const name = results[base + 10]!.result as string
-    const symbol = results[base + 11]!.result as string
+    const sideKeyRaw =
+      results[base + 10]?.status === 'success'
+        ? (results[base + 10]!.result as {
+            currency0: Address
+            currency1: Address
+            fee: number
+            tickSpacing: number
+            hooks: Address
+          })
+        : undefined
+    const name = results[base + 11]!.result as string
+    const symbol = results[base + 12]!.result as string
     const ethUsdWad =
-      results[base + 12]?.status === 'success'
-        ? (results[base + 12]!.result as bigint)
+      results[base + 13]?.status === 'success'
+        ? (results[base + 13]!.result as bigint)
         : undefined
 
     out.push({
@@ -255,6 +269,15 @@ export async function hydrateListings(
         tickSpacing: mainKey.tickSpacing,
         hooks: mainKey.hooks,
       },
+      sidePoolKey: sideKeyRaw
+        ? {
+            currency0: sideKeyRaw.currency0,
+            currency1: sideKeyRaw.currency1,
+            fee: sideKeyRaw.fee,
+            tickSpacing: sideKeyRaw.tickSpacing,
+            hooks: sideKeyRaw.hooks,
+          }
+        : undefined,
       sidePoolDeployed,
       hydratedAt: Date.now(),
       ethUsdWad: ethUsdWad != null ? ethUsdWad.toString() : undefined,

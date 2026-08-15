@@ -7,7 +7,8 @@ import {
   formatDeltaPct,
   formatUsdSpot,
 } from '../prices/spotMath'
-import { useMainPoolSpot } from '../prices/useMainPoolSpot'
+import { useCostBasis } from '../prices/useCostBasis'
+import { useListingSpot } from '../prices/useMainPoolSpot'
 import { FlexCard } from './FlexCard'
 import { useIndex } from './IndexProvider'
 import { Stamp } from './Stamp'
@@ -21,6 +22,7 @@ type BagMetric = {
   valueUsd: number | null
   deltaPct: number | null
   spotUsd: number | null
+  gotAt?: string
 }
 
 function BagRow({
@@ -34,10 +36,21 @@ function BagRow({
   isCreator: boolean
   onOpen: (listing: Address) => void
 }) {
-  const spot = useMainPoolSpot(listing, true)
+  const { address } = useAccount()
+  const spot = useListingSpot(listing, true)
+  const basis = useCostBasis(
+    listing,
+    address,
+    balanceRaw,
+    spot?.liveEthUsd ?? null,
+  )
   const human = Number(formatEther(balanceRaw))
   const valueUsd = spot ? human * spot.usdPerToken : null
-  const stampUp = spot ? spot.deltaPct >= 0 : true
+  const displayDelta =
+    basis != null && spot
+      ? ((spot.usdPerToken - basis.avgCostUsd) / basis.avgCostUsd) * 100
+      : (spot?.deltaPct ?? null)
+  const stampUp = displayDelta != null ? displayDelta >= 0 : true
 
   return (
     <button
@@ -46,9 +59,7 @@ function BagRow({
       style={{ width: '100%', textAlign: 'left', cursor: 'pointer' }}
       onClick={() => onOpen(listing.listing)}
     >
-      <div className="title">
-        💼 {listing.symbol.toLowerCase()}_bag.zip
-      </div>
+      <div className="title">💼 {listing.symbol.toLowerCase()}_bag.zip</div>
       <div className="body95">
         <div className="coinrow">
           <div className="coinic">
@@ -59,7 +70,7 @@ function BagRow({
               ${listing.symbol}{' '}
               <Stamp variant={stampUp ? 'stonkz' : 'not'}>
                 {spot
-                  ? spot.deltaPct >= 0
+                  ? (displayDelta ?? 0) >= 0
                     ? 'STONKZ'
                     : 'NOT STONKZ'
                   : 'STONKZ'}
@@ -75,16 +86,23 @@ function BagRow({
                   · {formatUsdSpot(valueUsd)} @ spot
                 </>
               )}
+              {basis != null && (
+                <>
+                  {' '}
+                  · got at {formatUsdSpot(basis.avgCostUsd)} avg
+                  {basis.partial ? ' (partial — swaps only)' : ''}
+                </>
+              )}
             </div>
           </div>
-          {spot && (
+          {spot && displayDelta != null && (
             <div>
               <div className="px">{formatUsdSpot(spot.usdPerToken)}</div>
               <div
-                className={`px ${spot.deltaPct >= 0 ? 'up' : 'down'}`}
+                className={`px ${displayDelta >= 0 ? 'up' : 'down'}`}
                 style={{ fontSize: 11 }}
               >
-                {formatDeltaPct(spot.deltaPct)}
+                {formatDeltaPct(displayDelta)}
               </div>
             </div>
           )}
@@ -94,7 +112,6 @@ function BagRow({
   )
 }
 
-/** Per-bag spot probe — reports valueUsd = balance * spot when available. */
 function BagSpotProbe({
   listing,
   balanceRaw,
@@ -104,9 +121,24 @@ function BagSpotProbe({
   balanceRaw: bigint
   onMetric: (m: BagMetric) => void
 }) {
-  const spot = useMainPoolSpot(listing, true)
+  const { address } = useAccount()
+  const spot = useListingSpot(listing, true)
+  const basis = useCostBasis(
+    listing,
+    address,
+    balanceRaw,
+    spot?.liveEthUsd ?? null,
+  )
   const coins = Number(formatEther(balanceRaw))
   const valueUsd = spot ? coins * spot.usdPerToken : null
+  const deltaPct =
+    basis != null && spot
+      ? ((spot.usdPerToken - basis.avgCostUsd) / basis.avgCostUsd) * 100
+      : (spot?.deltaPct ?? null)
+  const gotAt =
+    basis != null
+      ? `got at ${formatUsdSpot(basis.avgCostUsd)} avg${basis.partial ? ' · partial — swaps only' : ''} · now ${formatUsdSpot(spot?.usdPerToken ?? 0)}`
+      : undefined
 
   useEffect(() => {
     onMetric({
@@ -114,15 +146,17 @@ function BagSpotProbe({
       symbol: listing.symbol,
       coins,
       valueUsd,
-      deltaPct: spot?.deltaPct ?? null,
+      deltaPct,
       spotUsd: spot?.usdPerToken ?? null,
+      gotAt,
     })
   }, [
     coins,
+    deltaPct,
+    gotAt,
     listing.listing,
     listing.symbol,
     onMetric,
-    spot?.deltaPct,
     spot?.usdPerToken,
     valueUsd,
   ])
@@ -138,7 +172,9 @@ function FlexCardMaker({
   balances: Map<string, bigint>
 }) {
   const toast = useToast()
-  const [metrics, setMetrics] = useState<Map<string, BagMetric>>(() => new Map())
+  const [metrics, setMetrics] = useState<Map<string, BagMetric>>(
+    () => new Map(),
+  )
 
   const onMetric = useCallback((m: BagMetric) => {
     setMetrics((prev) => {
@@ -148,7 +184,8 @@ function FlexCardMaker({
         cur &&
         cur.valueUsd === m.valueUsd &&
         cur.deltaPct === m.deltaPct &&
-        cur.coins === m.coins
+        cur.coins === m.coins &&
+        cur.gotAt === m.gotAt
       ) {
         return prev
       }
@@ -164,9 +201,8 @@ function FlexCardMaker({
       if (m.valueUsd == null) continue
       if (!top || (top.valueUsd ?? -1) < m.valueUsd) top = m
     }
-    // If no priced bags yet, fall back to first bag by coin count so flex still shows.
     if (!top && bags.length > 0) {
-      const L = bags[0]
+      const L = bags[0]!
       const key = L.listing.toLowerCase()
       return (
         metrics.get(key) ?? {
@@ -222,6 +258,7 @@ function FlexCardMaker({
               deltaPct={best.deltaPct}
               valueUsd={best.valueUsd}
               coins={best.coins}
+              subtitle={best.gotAt}
             />
             <button
               type="button"
@@ -246,7 +283,9 @@ function LeaguePanel({
   balances: Map<string, bigint>
 }) {
   const { address } = useAccount()
-  const [metrics, setMetrics] = useState<Map<string, BagMetric>>(() => new Map())
+  const [metrics, setMetrics] = useState<Map<string, BagMetric>>(
+    () => new Map(),
+  )
 
   const onMetric = useCallback((m: BagMetric) => {
     setMetrics((prev) => {
@@ -337,8 +376,12 @@ export function MyStuffWindow({
         if (cancelled) return
         const next = new Map<string, bigint>()
         results.forEach((r, i) => {
-          if (r.status === 'success' && typeof r.result === 'bigint' && r.result > 0n) {
-            next.set(readable[i].listing.toLowerCase(), r.result)
+          if (
+            r.status === 'success' &&
+            typeof r.result === 'bigint' &&
+            r.result > 0n
+          ) {
+            next.set(readable[i]!.listing.toLowerCase(), r.result)
           }
         })
         setBalances(next)
@@ -355,9 +398,7 @@ export function MyStuffWindow({
     }
   }, [address, client, readable])
 
-  const bags = readable.filter((L) =>
-    balances.has(L.listing.toLowerCase()),
-  )
+  const bags = readable.filter((L) => balances.has(L.listing.toLowerCase()))
 
   return (
     <Win95Window

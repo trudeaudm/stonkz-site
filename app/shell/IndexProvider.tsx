@@ -9,8 +9,13 @@ import {
 import { usePublicClient } from 'wagmi'
 import { env } from '../config/env'
 import { scanExpressListings } from '../indexer/scanner'
+import { scanListingSwaps } from '../indexer/swaps'
 import { loadEnvelope } from '../indexer/storage'
-import type { IndexedListing, ScanProgress } from '../indexer/types'
+import type {
+  IndexEnvelope,
+  IndexedListing,
+  ScanProgress,
+} from '../indexer/types'
 
 export type LogLine = {
   id: string
@@ -20,7 +25,9 @@ export type LogLine = {
 
 type IndexValue = {
   listings: IndexedListing[]
+  envelope: IndexEnvelope | null
   progress: ScanProgress | null
+  swapProgress: ScanProgress | null
   error: string | null
   logLines: LogLine[]
   factoryMissing: boolean
@@ -54,7 +61,9 @@ export function IndexProvider({ children }: { children: ReactNode }) {
   const client = usePublicClient()
   const factory = env.addrExpressFactory
   const [listings, setListings] = useState<IndexedListing[]>([])
+  const [envelope, setEnvelope] = useState<IndexEnvelope | null>(null)
   const [progress, setProgress] = useState<ScanProgress | null>(null)
+  const [swapProgress, setSwapProgress] = useState<ScanProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [logLines, setLogLines] = useState<LogLine[]>([WELCOME_LINE])
 
@@ -62,6 +71,7 @@ export function IndexProvider({ children }: { children: ReactNode }) {
     if (!factory || !client) return
     const cached = loadEnvelope(env.chainId, factory)
     if (cached) {
+      setEnvelope(cached)
       setListings(cached.listings)
       if (cached.listings.length > 0) {
         setLogLines(
@@ -85,7 +95,7 @@ export function IndexProvider({ children }: { children: ReactNode }) {
 
     void (async () => {
       try {
-        const { envelope, progress: p } = await scanExpressListings(
+        const { envelope: envl, progress: p } = await scanExpressListings(
           client,
           factory,
           {
@@ -97,17 +107,24 @@ export function IndexProvider({ children }: { children: ReactNode }) {
                   const text = `scan · block ${pr.cursor.toString()} / ${pr.head.toString()} (${pr.percent.toFixed(1)}%)`
                   const last = prev[prev.length - 1]
                   if (last?.text.startsWith('scan ·')) {
-                    return [...prev.slice(0, -1), { id: `scan:${pr.cursor}`, text, at: Date.now() }]
+                    return [
+                      ...prev.slice(0, -1),
+                      { id: `scan:${pr.cursor}`, text, at: Date.now() },
+                    ]
                   }
-                  return [...prev, { id: `scan:${pr.cursor}`, text, at: Date.now() }]
+                  return [
+                    ...prev,
+                    { id: `scan:${pr.cursor}`, text, at: Date.now() },
+                  ]
                 })
               }
             },
           },
         )
-        setListings(envelope.listings)
+        setListings(envl.listings)
+        setEnvelope(envl)
         setProgress(p)
-        for (const L of envelope.listings) {
+        for (const L of envl.listings) {
           const id = `${L.txHash}:${L.logIndex}`
           if (seen.has(id)) continue
           seen.add(id)
@@ -127,10 +144,76 @@ export function IndexProvider({ children }: { children: ReactNode }) {
             ...prev.filter((l) => !l.text.startsWith('scan ·')),
             {
               id: `done:${p.head.toString()}`,
-              text: `index idle · head ${p.head.toString()} · ${envelope.listings.length} listing(s)`,
+              text: `index idle · head ${p.head.toString()} · ${envl.listings.length} listing(s)`,
               at: Date.now(),
             },
           ])
+        }
+
+        // Swap indexer — after listings; cursor discipline inside scanListingSwaps.
+        if (env.addrPoolManager && envl.listings.some((L) => !L.hydrateError)) {
+          try {
+            const { envelope: withSwaps, progress: sp } = await scanListingSwaps(
+              client,
+              factory,
+              {
+                signal: ac.signal,
+                onProgress: (pr) => {
+                  setSwapProgress(pr)
+                  if (pr.status === 'scanning') {
+                    setLogLines((prev) => {
+                      const text = pr.message
+                      const last = prev[prev.length - 1]
+                      if (last?.text.startsWith('swaps ·')) {
+                        return [
+                          ...prev.slice(0, -1),
+                          { id: `swaps:${Date.now()}`, text, at: Date.now() },
+                        ]
+                      }
+                      return [
+                        ...prev,
+                        { id: `swaps:${Date.now()}`, text, at: Date.now() },
+                      ]
+                    })
+                  }
+                },
+                onErrorLine: (text) => {
+                  setLogLines((prev) => [
+                    ...prev,
+                    { id: `swaps-err:${Date.now()}`, text, at: Date.now() },
+                  ])
+                },
+              },
+            )
+            setEnvelope(withSwaps)
+            setListings(withSwaps.listings)
+            setSwapProgress(sp)
+            if (sp.status === 'done') {
+              setLogLines((prev) => [
+                ...prev.filter((l) => !l.text.startsWith('swaps ·')),
+                {
+                  id: `swaps-done:${sp.head.toString()}`,
+                  text: sp.message,
+                  at: Date.now(),
+                },
+              ])
+            }
+          } catch (swapErr) {
+            if (ac.signal.aborted) return
+            const msg =
+              swapErr instanceof Error ? swapErr.message : String(swapErr)
+            console.error('[swaps] scan failed:', msg)
+            setLogLines((prev) => [
+              ...prev,
+              {
+                id: `swaps-err:${Date.now()}`,
+                text: `swaps ERROR — ${msg}`,
+                at: Date.now(),
+              },
+            ])
+            // Keep listings; do not wipe envelope.
+            setEnvelope(loadEnvelope(env.chainId, factory))
+          }
         }
       } catch (err) {
         if (ac.signal.aborted) return
@@ -143,12 +226,14 @@ export function IndexProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       listings,
+      envelope,
       progress,
+      swapProgress,
       error,
       logLines,
       factoryMissing: !factory,
     }),
-    [listings, progress, error, logLines, factory],
+    [listings, envelope, progress, swapProgress, error, logLines, factory],
   )
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
