@@ -44,9 +44,9 @@ export function Taskbar({
             key={w.id}
             type="button"
             className={
-              focused === w.id && !w.minimized ? 'tb-win on' : 'tb-win'
+              focused === w.id && !w.iconized ? 'tb-win on' : 'tb-win'
             }
-            onClick={() => (w.minimized ? restore(w.id) : focus(w.id))}
+            onClick={() => (w.iconized ? restore(w.id) : focus(w.id))}
           >
             {w.title}
           </button>

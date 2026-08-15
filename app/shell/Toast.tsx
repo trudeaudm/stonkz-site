@@ -13,6 +13,7 @@ type Toast = {
   id: number
   message: string
   kind: ToastKind
+  show: boolean
 }
 
 type ToastApi = {
@@ -28,23 +29,29 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((t) => {
       const id = (t[t.length - 1]?.id ?? 0) + 1
       window.setTimeout(() => {
+        setToasts((cur) =>
+          cur.map((x) => (x.id === id ? { ...x, show: false } : x)),
+        )
+      }, 2400)
+      window.setTimeout(() => {
         setToasts((cur) => cur.filter((x) => x.id !== id))
-      }, 3200)
-      return [...t.slice(-4), { id, message, kind }]
+      }, 2800)
+      return [...t.slice(-2), { id, message, kind, show: true }]
     })
   }, [])
 
   const api = useMemo(() => ({ push }), [push])
 
+  const top = toasts[toasts.length - 1]
+
   return (
     <Ctx.Provider value={api}>
       {children}
-      <div className="toast-stack" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} className={`toast95 toast-${t.kind}`}>
-            {t.message}
-          </div>
-        ))}
+      <div
+        className={`toast${top?.show ? ' show' : ''}${top ? ` toast-${top.kind}` : ''}`}
+        aria-live="polite"
+      >
+        {top?.message ?? ''}
       </div>
     </Ctx.Provider>
   )

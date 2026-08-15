@@ -41,7 +41,7 @@ export function MarketHeader({
   })()
 
   return (
-    <header className="mkt-top">
+    <header className="top">
       <a href="#/" className="logo-lockup">
         <div className="logo-impact">S T O N K Z</div>
       </a>
@@ -49,7 +49,7 @@ export function MarketHeader({
         <div className="tagline">only go up ☝</div>
         <div className="tagline tagline-2">robinhood chain</div>
       </div>
-      <div className="topnav">
+      <nav className="topnav">
         <button type="button" className="btn95 go" onClick={onMakeCoin}>
           ＋ make coin
         </button>
@@ -58,14 +58,14 @@ export function MarketHeader({
         </button>
         <button
           type="button"
-          className="wallet-chip header-chip"
+          className="btn95"
           onClick={() => void onWallet()}
           disabled={busy}
           title={address ? 'account' : 'connect'}
         >
           {chipLabel}
         </button>
-      </div>
+      </nav>
       {declined && !address && (
         <p className="hint header-hint">connection declined — retry</p>
       )}

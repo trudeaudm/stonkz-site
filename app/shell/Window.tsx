@@ -1,12 +1,13 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { useWindowManager, type WinId } from './windowManager'
 
+/** PROGRAM window — pointer-drag (mouse+touch), iconizable, position-persisted. */
 export function Win95Window({
   id,
   title,
   titleTone,
   children,
-  onClose,
+  onClose: _onClose,
   width,
 }: {
   id: WinId
@@ -16,88 +17,101 @@ export function Win95Window({
   onClose?: () => void
   width?: number
 }) {
-  const { windows, focus, minimize, close, move } = useWindowManager()
+  void _onClose
+  const { windows, focus, iconize, move, savePos } = useWindowManager()
   const win = windows.find((w) => w.id === id)
-  const drag = useRef<{ ox: number; oy: number; sx: number; sy: number } | null>(
-    null,
-  )
+  const drag = useRef<{
+    pointerId: number
+    ox: number
+    oy: number
+    sx: number
+    sy: number
+  } | null>(null)
 
-  useEffect(() => {
-    const onMove = (e: PointerEvent) => {
-      if (!drag.current || !win) return
-      const nx = drag.current.sx + (e.clientX - drag.current.ox)
-      const ny = drag.current.sy + (e.clientY - drag.current.oy)
-      move(id, Math.max(0, nx), Math.max(0, ny))
-    }
-    const onUp = () => {
-      drag.current = null
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-    return () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-  }, [id, move, win])
+  if (!win || win.iconized) return null
 
-  if (!win || win.minimized) return null
-
-  const handleClose = () => {
-    close(id)
-    onClose?.()
-  }
+  const w = width ?? win.width
+  const narrow =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(max-width: 839px)').matches
 
   return (
     <div
-      className="mw-win"
-      style={{
-        zIndex: win.z,
-        left: win.x,
-        top: win.y,
-        width: width ?? undefined,
-      }}
-      onMouseDown={() => focus(id)}
+      className={`win mw-win program-win${narrow ? ' narrow-sheet' : ''}`}
+      style={
+        narrow
+          ? { zIndex: win.z, width: '100%' }
+          : {
+              zIndex: win.z,
+              left: win.x,
+              top: win.y,
+              width: w,
+            }
+      }
+      onPointerDown={() => focus(id)}
     >
       <div
-        className={`mw-title tone-${titleTone ?? 'navy'}`}
+        className={`title${titleTone && titleTone !== 'navy' ? ` ${titleTone}` : ''}`}
+        style={narrow ? undefined : { touchAction: 'none' }}
         onPointerDown={(e) => {
-          if (window.matchMedia('(max-width: 840px)').matches) return
-          focus(id)
+          if (narrow) return
+          if ((e.target as HTMLElement).closest('button.x')) return
           drag.current = {
+            pointerId: e.pointerId,
             ox: e.clientX,
             oy: e.clientY,
             sx: win.x,
             sy: win.y,
           }
+          focus(id)
+          try {
+            ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+          } catch {
+            /* untrusted / synthetic events may not capture */
+          }
+        }}
+        onPointerMove={(e) => {
+          const d = drag.current
+          if (!d || d.pointerId !== e.pointerId) return
+          move(id, d.sx + (e.clientX - d.ox), d.sy + (e.clientY - d.oy))
+        }}
+        onPointerUp={(e) => {
+          if (!drag.current || drag.current.pointerId !== e.pointerId) return
+          try {
+            ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+          } catch {
+            /* already released */
+          }
+          drag.current = null
+          savePos(id)
+        }}
+        onPointerCancel={() => {
+          drag.current = null
         }}
       >
-        <span className="mw-title-text">{title}</span>
-        <span className="mw-wbtns">
+        <button
+          type="button"
+          className="title-drag"
+          aria-label={`drag ${title}`}
+          tabIndex={-1}
+        >
+          <span className="mw-title-text">{title}</span>
+        </button>
+        <span className="wbtns">
           <button
             type="button"
-            className="mw-tbtn"
-            title="minimize"
+            className="x"
+            title="iconize"
             onClick={(e) => {
               e.stopPropagation()
-              minimize(id)
-            }}
-          >
-            _
-          </button>
-          <button
-            type="button"
-            className="mw-tbtn"
-            title="close"
-            onClick={(e) => {
-              e.stopPropagation()
-              handleClose()
+              iconize(id)
             }}
           >
             ×
           </button>
         </span>
       </div>
-      <div className="mw-body">{children}</div>
+      <div className="body95">{children}</div>
     </div>
   )
 }

@@ -12,37 +12,38 @@ export function TickerTape() {
   const { listings, progress } = useIndex()
 
   const items = useMemo(() => {
-    const status: string[] = [
-      'gate: closed — soft launch',
-      `head: ${progress?.head?.toString() ?? '…'}`,
-      `launches indexed: ${listings.length}`,
+    const status: { text: string; up?: boolean }[] = [
+      { text: 'gate: closed — soft launch' },
+      { text: `head: ${progress?.head?.toString() ?? '…'}` },
+      { text: `launches indexed: ${listings.length}`, up: listings.length > 0 },
     ]
     if (progress?.status === 'scanning') {
-      status.push(
-        `scan: ${progress.percent.toFixed(1)}% · block ${progress.cursor.toString()}`,
-      )
+      status.push({
+        text: `scan: ${progress.percent.toFixed(1)}% · block ${progress.cursor.toString()}`,
+      })
     }
-    const ticks = listings.map(
-      (L) =>
-        `$${L.symbol} · ${tierLabel(L.startMcap)} tier · block ${L.blockNumber}`,
-    )
-    // Interleave: status, tick, status, tick…
-    const out: string[] = []
+    const ticks = listings.map((L) => ({
+      text: `$${L.symbol} · ${tierLabel(L.startMcap)} tier · block ${L.blockNumber}`,
+      up: true as const,
+    }))
+    const out: { text: string; up?: boolean }[] = []
     const max = Math.max(status.length, ticks.length, 1)
     for (let i = 0; i < max; i++) {
       if (status[i % status.length]) out.push(status[i % status.length])
       if (ticks[i]) out.push(ticks[i])
     }
-    // Duplicate for seamless marquee
     return [...out, ...out]
   }, [listings, progress])
 
   return (
-    <div className="tape crt-tape" aria-label="market ticker">
+    <div className="tape" aria-label="market ticker">
       <div className="tape-track">
         {items.map((t, i) => (
-          <span key={`${t}-${i}`} className="tape-item">
-            {t}
+          <span
+            key={`${t.text}-${i}`}
+            className={`tape-item${t.up ? ' up' : ''}`}
+          >
+            {t.text}
           </span>
         ))}
       </div>

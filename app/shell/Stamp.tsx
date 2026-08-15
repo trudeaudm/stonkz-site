@@ -1,4 +1,4 @@
-type StampVariant = 'stonkz' | 'red' | 'amber' | 'genesis'
+type StampVariant = 'stonkz' | 'not' | 'gen' | 'insta' | 'gone'
 
 export function Stamp({
   children,
@@ -7,5 +7,5 @@ export function Stamp({
   children: string
   variant?: StampVariant
 }) {
-  return <span className={`stamp stamp-${variant}`}>{children}</span>
+  return <span className={`stamp ${variant}`}>{children}</span>
 }

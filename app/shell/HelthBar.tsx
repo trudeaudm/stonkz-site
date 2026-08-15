@@ -4,7 +4,6 @@ export function HelthBar({
   labelLeft,
   labelRight,
 }: {
-  /** 0..1 from real measured values */
   ratio: number
   labelLeft: string
   labelRight: string

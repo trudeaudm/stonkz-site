@@ -11,6 +11,7 @@ import { MarketGrid } from './market/MarketGrid'
 import { MarketHeader } from './market/MarketHeader'
 import { TickerTape } from './market/TickerTape'
 import { AccountWindow } from './shell/AccountWindow'
+import { DeskShelf } from './shell/DeskShelf'
 import { IndexProvider } from './shell/IndexProvider'
 import { MyStuffWindow } from './shell/MyStuffWindow'
 import { Scenery } from './shell/Scenery'
@@ -47,7 +48,7 @@ function navigate(route: Route) {
 }
 
 function MarketPage() {
-  const { open, close, isOpen, windows } = useWindowManager()
+  const { open, close, isOpen, isVisible, windows } = useWindowManager()
   const [route, setRoute] = useState<Route>(() =>
     typeof window === 'undefined' ? { name: 'home' } : parseHash(),
   )
@@ -151,7 +152,7 @@ function MarketPage() {
   return (
     <div className="market-page">
       <Scenery />
-      <div className="market-wrap">
+      <div className="wrap">
         <MarketHeader
           onMakeCoin={goLaunch}
           onMyStuff={goMe}
@@ -164,15 +165,24 @@ function MarketPage() {
         <HeroHeadline />
         <ActivityLogDock />
         <GenesisSlot />
+        <DeskShelf />
         <MarketGrid onOpen={openToken} />
+        <footer className="site-foot">
+          STONKZ · stonkz.green · gated build · every number on this page is
+          read from chain
+          <br />
+          not affiliated with robinhood markets · this is not financal advice
+          becuase we cannot spell financal · never trade money you cannot lose,
+          fren
+        </footer>
       </div>
 
       <div className="overlay-stage">
         <ChainGuard>
           {(isOpen('make_coin') || isOpen('precheck') || isOpen('certificate')) && (
             <LaunchHost
-              formOpen={isOpen('make_coin')}
-              precheckOpen={isOpen('precheck')}
+              formOpen={isVisible('make_coin')}
+              precheckOpen={isVisible('precheck')}
               onCloseForm={() => {
                 close('make_coin')
                 if (!isOpen('precheck') && !isOpen('certificate')) {

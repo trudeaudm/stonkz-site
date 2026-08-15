@@ -31,23 +31,36 @@ export function TokenCard({
         <div className="grow">
           <div className="tk">
             ${sym}{' '}
-            <Stamp variant={listing.liquidityLocked ? 'stonkz' : 'red'}>
+            <Stamp variant={listing.liquidityLocked ? 'stonkz' : 'not'}>
               {listing.liquidityLocked ? 'locked forever' : 'unlockable'}
             </Stamp>
           </div>
           <div className="nm">{listing.name}</div>
         </div>
       </div>
-      <div className="card-badges">
-        <span className="badge">{tierLabel(listing.startMcap)} tier</span>
-        <span className="badge">
-          {listing.createSidePool
-            ? listing.sidePoolDeployed
-              ? `side ${listing.sidePoolBps}bps`
-              : `side pending ${listing.sidePoolBps}bps`
-            : 'no side'}
-        </span>
-        <span className="badge">block {listing.blockNumber}</span>
+      <div className="drs">
+        <div className="dr">
+          <span>tier</span>
+          <b>{tierLabel(listing.startMcap)}</b>
+        </div>
+        <div className="dr">
+          <span>lock</span>
+          <b>{listing.liquidityLocked ? 'forever' : 'unlockable'}</b>
+        </div>
+        <div className="dr">
+          <span>side</span>
+          <b>
+            {listing.createSidePool
+              ? listing.sidePoolDeployed
+                ? `${listing.sidePoolBps}bps live`
+                : `${listing.sidePoolBps}bps pending`
+              : 'none'}
+          </b>
+        </div>
+        <div className="dr">
+          <span>block</span>
+          <b>{listing.blockNumber}</b>
+        </div>
       </div>
       <button
         type="button"
@@ -69,7 +82,7 @@ export function MarketGrid({
   filterCreator?: string
   emptyCopy?: string
 }) {
-  const { listings, progress } = useIndex()
+  const { listings } = useIndex()
 
   const rows = [...listings]
     .filter((L) =>
@@ -87,9 +100,9 @@ export function MarketGrid({
   return (
     <section className="market-section">
       {!filterCreator && (
-        <div className="section-caption">— on the market —</div>
+        <div className="caption section-caption">— ON THE MARKET —</div>
       )}
-      <div className="mkt-grid">
+      <div className="grid">
         {rows.map((L) => (
           <TokenCard key={L.listing} listing={L} onOpen={onOpen} />
         ))}

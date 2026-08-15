@@ -1,37 +1,38 @@
 import type { ReactNode } from 'react'
 
-/** In-flow win95 chrome — not draggable, not in the window manager. */
+/** CARD window — in-flow, never draggable, no position state. */
 export function StaticWin({
   title,
   titleTone = 'navy',
   children,
   className,
-  onClose,
+  onIconize,
 }: {
   title: string
   titleTone?: 'navy' | 'green' | 'amber' | 'red'
   children: ReactNode
   className?: string
-  onClose?: () => void
+  /** When set, × iconizes rather than omitting. */
+  onIconize?: () => void
 }) {
   return (
-    <div className={`static-win ${className ?? ''}`}>
-      <div className={`mw-title tone-${titleTone}`}>
+    <div className={`win static-win ${className ?? ''}`}>
+      <div className={`title ${titleTone === 'navy' ? '' : titleTone}`.trim()}>
         <span className="mw-title-text">{title}</span>
-        {onClose && (
-          <span className="mw-wbtns">
+        {onIconize && (
+          <span className="wbtns">
             <button
               type="button"
-              className="mw-tbtn"
-              title="close"
-              onClick={onClose}
+              className="x"
+              title="iconize"
+              onClick={onIconize}
             >
               ×
             </button>
           </span>
         )}
       </div>
-      <div className="mw-body">{children}</div>
+      <div className="body95">{children}</div>
     </div>
   )
 }

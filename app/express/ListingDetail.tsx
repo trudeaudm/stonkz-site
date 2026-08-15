@@ -133,7 +133,7 @@ export function TokenWindow({
         <p className="eyebrow">
           {record.symbol} — {record.name}
         </p>
-        <Stamp variant={record.liquidityLocked ? 'stonkz' : 'red'}>
+        <Stamp variant={record.liquidityLocked ? 'stonkz' : 'not'}>
           {record.liquidityLocked ? 'locked forever' : 'creator can withdraw'}
         </Stamp>
       </div>
