@@ -1,10 +1,12 @@
 /**
- * CREATE2 / listingSalt helpers — formulas cited to NOTES.md 0b/0d/0e.
+ * CREATE2 / listingSalt / token CREATE helpers — formulas cited to NOTES.md 0b/0d/0e
+ * and Express V2 `predictTokenAddress` (CREATE nonce-1 from listing).
  */
 import {
   concat,
   encodeAbiParameters,
   getAddress,
+  getContractAddress,
   getCreate2Address,
   hexToBytes,
   keccak256,
@@ -15,7 +17,7 @@ import {
   type Hex,
 } from 'viem'
 
-/** NOTES.md 0e — Vanity.PREFIX = 0x4663 (top 2 bytes / 4 nibbles). */
+/** NOTES.md 0e — Vanity.PREFIX = 0x4663 (top 2 bytes / 4 nibbles). Express V2: TOKEN address. */
 export const VANITY_PREFIX = '4663'
 
 /** Historical fork-test constant (1 ETH) — superseded by env.listBufferWei (1e6 wei). */
@@ -55,6 +57,26 @@ export function predictListingAddressLocal(
 ): Address {
   const salt = listingSalt(deployer, userSalt)
   return predictCreate2(factory, salt, initCodeHash)
+}
+
+/**
+ * Express V2 — token = CREATE at listing nonce 1.
+ * RLP([listing, 1]) = 0xd6 || 0x94 || listing || 0x01 (20-byte addr, nonce=1).
+ * Same as factory `predictTokenAddress` / viem `getContractAddress({ from, nonce: 1n })`.
+ */
+export function predictTokenAddressLocal(listing: Address): Address {
+  return getContractAddress({ from: listing, nonce: 1n })
+}
+
+/** Manual RLP path (worker / parity checks without getContractAddress). */
+export function predictTokenAddressRlp(listing: Address): Address {
+  const packed = concat([
+    '0xd6',
+    '0x94',
+    listing,
+    '0x01',
+  ] as const)
+  return getAddress(`0x${keccak256(packed).slice(-40)}`)
 }
 
 export function matchesVanityPrefix(address: Address): boolean {

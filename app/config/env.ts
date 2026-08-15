@@ -78,6 +78,7 @@ export const env = Object.freeze({
   testerAllowlist: parseAllowlist('VITE_TESTER_ALLOWLIST'),
   /** Decimal wei string for list() settle buffer. */
   listBufferWei: parseWeiString('VITE_LIST_BUFFER_WEI', '1000000'),
+  /** Express V2 deploy block (37184159). V1 floor orphaned with old factory. */
   indexFromBlock: parseOptionalUint('VITE_INDEX_FROM_BLOCK', 0),
   addrV4Adapter: optionalAddress('VITE_ADDR_V4_ADAPTER'),
   addrFeeHook: optionalAddress('VITE_ADDR_FEE_HOOK'),
@@ -86,6 +87,7 @@ export const env = Object.freeze({
   addrBuybackAccum: optionalAddress('VITE_ADDR_BUYBACK_ACCUM'),
   addrLadderSettlement: optionalAddress('VITE_ADDR_LADDER_SETTLEMENT'),
   addrVault: optionalAddress('VITE_ADDR_VAULT'),
+  /** Express V2: 0x3eAb…C5Fd. V1 0xdaA8… is orphaned; cache key rotates on change. */
   addrExpressFactory: optionalAddress('VITE_ADDR_EXPRESS_FACTORY'),
   addrLadderFactory: optionalAddress('VITE_ADDR_LADDER_FACTORY'),
   addrSafe: optionalAddress('VITE_ADDR_SAFE'),

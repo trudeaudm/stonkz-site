@@ -95,6 +95,13 @@ export const directListingAbi = [
   },
   {
     type: 'function',
+    name: 'ethUsdWad',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
     name: 'creatorReserveState',
     stateMutability: 'view',
     inputs: [],

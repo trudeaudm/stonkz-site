@@ -1,7 +1,29 @@
 /**
- * Minimal Express factory ABI — field order pinned to NOTES.md 0f.
+ * Minimal Express factory ABI — field order pinned to NOTES.md 0f + Express V2.
  * No address literals; consumers pass env.addrExpressFactory.
+ *
+ * ListingParams (verbatim StonkzDirectListing.sol @ fix/express-pricing):
+ *   startMcap, totalSupply, creatorReserveBps, deliveryMode, vestDuration,
+ *   declaredUse, creator, name, symbol, createSidePool, sidePoolBps,
+ *   liquidityLocked, refPriceWad, ethUsdWad
  */
+const listingParamsComponents = [
+  { name: 'startMcap', type: 'uint256' },
+  { name: 'totalSupply', type: 'uint256' },
+  { name: 'creatorReserveBps', type: 'uint16' },
+  { name: 'deliveryMode', type: 'uint8' },
+  { name: 'vestDuration', type: 'uint64' },
+  { name: 'declaredUse', type: 'bytes32' },
+  { name: 'creator', type: 'address' },
+  { name: 'name', type: 'string' },
+  { name: 'symbol', type: 'string' },
+  { name: 'createSidePool', type: 'bool' },
+  { name: 'sidePoolBps', type: 'uint16' },
+  { name: 'liquidityLocked', type: 'bool' },
+  { name: 'refPriceWad', type: 'uint256' },
+  { name: 'ethUsdWad', type: 'uint256' },
+] as const
+
 export const expressFactoryAbi = [
   {
     type: 'function',
@@ -11,21 +33,7 @@ export const expressFactoryAbi = [
       {
         name: 'p',
         type: 'tuple',
-        components: [
-          { name: 'startMcap', type: 'uint256' },
-          { name: 'totalSupply', type: 'uint256' },
-          { name: 'creatorReserveBps', type: 'uint16' },
-          { name: 'deliveryMode', type: 'uint8' },
-          { name: 'vestDuration', type: 'uint64' },
-          { name: 'declaredUse', type: 'bytes32' },
-          { name: 'creator', type: 'address' },
-          { name: 'name', type: 'string' },
-          { name: 'symbol', type: 'string' },
-          { name: 'createSidePool', type: 'bool' },
-          { name: 'sidePoolBps', type: 'uint16' },
-          { name: 'liquidityLocked', type: 'bool' },
-          { name: 'refPriceWad', type: 'uint256' },
-        ],
+        components: listingParamsComponents,
       },
       { name: 'userSalt', type: 'bytes32' },
     ],
@@ -49,21 +57,7 @@ export const expressFactoryAbi = [
       {
         name: 'p',
         type: 'tuple',
-        components: [
-          { name: 'startMcap', type: 'uint256' },
-          { name: 'totalSupply', type: 'uint256' },
-          { name: 'creatorReserveBps', type: 'uint16' },
-          { name: 'deliveryMode', type: 'uint8' },
-          { name: 'vestDuration', type: 'uint64' },
-          { name: 'declaredUse', type: 'bytes32' },
-          { name: 'creator', type: 'address' },
-          { name: 'name', type: 'string' },
-          { name: 'symbol', type: 'string' },
-          { name: 'createSidePool', type: 'bool' },
-          { name: 'sidePoolBps', type: 'uint16' },
-          { name: 'liquidityLocked', type: 'bool' },
-          { name: 'refPriceWad', type: 'uint256' },
-        ],
+        components: listingParamsComponents,
       },
     ],
     outputs: [{ type: 'bytes32' }],
@@ -78,6 +72,20 @@ export const expressFactoryAbi = [
       { name: 'initCodeHash', type: 'bytes32' },
     ],
     outputs: [{ name: 'predicted', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'predictTokenAddress',
+    stateMutability: 'pure',
+    inputs: [{ name: 'predictedListing', type: 'address' }],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'currentEthUsdWad',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
   },
   {
     type: 'function',
@@ -235,6 +243,31 @@ export const expressFactoryAbi = [
       { name: 'pairCurrency', type: 'address' },
     ],
   },
+  // Express V2 — DeployControls two-pool ETH/USD surface
+  { type: 'error', name: 'RefPoolUnset', inputs: [] },
+  {
+    type: 'error',
+    name: 'RefPoolEmpty',
+    inputs: [{ name: 'poolId', type: 'bytes32' }],
+  },
+  {
+    type: 'error',
+    name: 'RefPoolsDisagree',
+    inputs: [
+      { name: 'primaryWad', type: 'uint256' },
+      { name: 'checkWad', type: 'uint256' },
+    ],
+  },
+  // Decode surface for EthUsd* (map to "ETH/USD reference not configured")
+  { type: 'error', name: 'EthUsdUnset', inputs: [] },
+  {
+    type: 'error',
+    name: 'EthUsdOutOfBand',
+    inputs: [
+      { name: 'value', type: 'uint256' },
+      { name: 'bound', type: 'uint256' },
+    ],
+  },
   // deployed factory (disk build) — see stonkz-deployed-truth.md Part 3; absent at repo HEAD
   // selector 0x08586462
   { type: 'error', name: 'ListingCreateFailed', inputs: [] },
@@ -281,4 +314,6 @@ export type ListingParams = {
   sidePoolBps: number
   liquidityLocked: boolean
   refPriceWad: bigint
+  /** Caller sends 0; Express `_stampListingParams` sets `p.ethUsdWad = currentEthUsdWad()`. */
+  ethUsdWad: bigint
 }

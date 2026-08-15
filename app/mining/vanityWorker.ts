@@ -1,7 +1,8 @@
 /// <reference lib="webworker" />
 /**
  * Vanity salt miner (WASM keccak via hash-wasm).
- * Salt/CREATE2 layout cited to NOTES.md 0b/0d/0e — see create2.ts comments.
+ * Express V2: prefix test is on the predicted TOKEN (CREATE nonce-1 from listing),
+ * not the listing. Salt/CREATE2 layout cited to NOTES.md 0b/0d/0e.
  */
 import { createKeccak } from 'hash-wasm'
 import {
@@ -20,12 +21,11 @@ type StartMsg = {
   deployer: Address
   initCodeHash: Hex
   selfTestUserSalt: Hex
-  expectedSelfTestAddress: Address
+  expectedSelfTestListing: Address
+  expectedSelfTestToken: Address
 }
 
-type Msg =
-  | StartMsg
-  | { type: 'stop' }
+type Msg = StartMsg | { type: 'stop' }
 
 let stop = false
 
@@ -46,7 +46,7 @@ async function listingSalt(deployer: Address, userSalt: Hex): Promise<Hex> {
 }
 
 /** NOTES.md 0d — 0xff ++ factory ++ salt ++ initCodeHash */
-async function predict(
+async function predictListing(
   factory: Address,
   salt: Hex,
   initCodeHash: Hex,
@@ -56,6 +56,20 @@ async function predict(
   packed.set(hexToBytes(factory), 1)
   packed.set(hexToBytes(salt), 21)
   packed.set(hexToBytes(initCodeHash), 53)
+  const hash = await keccak256Hex(packed)
+  return getAddress(`0x${hash.slice(-40)}`)
+}
+
+/**
+ * Express V2 predictTokenAddress — RLP([listing, 1]) =
+ * 0xd6 || 0x94 || listing || 0x01
+ */
+async function predictToken(listing: Address): Promise<Address> {
+  const packed = new Uint8Array(1 + 1 + 20 + 1)
+  packed[0] = 0xd6
+  packed[1] = 0x94
+  packed.set(hexToBytes(listing), 2)
+  packed[22] = 0x01
   const hash = await keccak256Hex(packed)
   return getAddress(`0x${hash.slice(-40)}`)
 }
@@ -72,20 +86,26 @@ function randomSalt(): Hex {
 
 async function mine(msg: StartMsg) {
   stop = false
-  // Self-test: derive FIXED salt address; main thread already computed expected via viem.
   const testSalt = await listingSalt(msg.deployer, msg.selfTestUserSalt)
-  const testAddr = await predict(msg.factory, testSalt, msg.initCodeHash)
-  if (getAddress(testAddr) !== getAddress(msg.expectedSelfTestAddress)) {
+  const testListing = await predictListing(msg.factory, testSalt, msg.initCodeHash)
+  const testToken = await predictToken(testListing)
+  if (
+    getAddress(testListing) !== getAddress(msg.expectedSelfTestListing) ||
+    getAddress(testToken) !== getAddress(msg.expectedSelfTestToken)
+  ) {
     self.postMessage({
       type: 'selftest_fail',
-      worker: testAddr,
-      expected: msg.expectedSelfTestAddress,
+      workerListing: testListing,
+      workerToken: testToken,
+      expectedListing: msg.expectedSelfTestListing,
+      expectedToken: msg.expectedSelfTestToken,
     })
     return
   }
   self.postMessage({
     type: 'selftest_ok',
-    address: testAddr,
+    listing: testListing,
+    token: testToken,
     userSalt: msg.selfTestUserSalt,
   })
 
@@ -97,13 +117,19 @@ async function mine(msg: StartMsg) {
     for (let i = 0; i < 64 && !stop; i++) {
       const userSalt = randomSalt()
       const salt = await listingSalt(msg.deployer, userSalt)
-      const predicted = await predict(msg.factory, salt, msg.initCodeHash)
+      const predictedListing = await predictListing(
+        msg.factory,
+        salt,
+        msg.initCodeHash,
+      )
+      const predictedToken = await predictToken(predictedListing)
       attempts++
-      if (matchesPrefix(predicted)) {
+      if (matchesPrefix(predictedToken)) {
         self.postMessage({
           type: 'found',
           userSalt,
-          predicted,
+          predictedListing,
+          predictedToken,
           attempts,
           elapsedMs: performance.now() - t0,
         })

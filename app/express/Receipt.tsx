@@ -42,6 +42,11 @@ export function Receipt({
       <p>start mcap {formatEther(data.startMcap)} (pair units)</p>
       <p>start price {data.startPriceWad.toString()} wad</p>
       <p>start tick {data.startTick}</p>
+      <p>
+        stamped ETH/USD ~
+        {(Number(data.ethUsdWad) / 1e18).toFixed(2)}/ETH (immutable at
+        filing)
+      </p>
       <div className="rule" />
       <p>
         creator reserve {data.creatorReserve.toString()} raw · delivery {mode}

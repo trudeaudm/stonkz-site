@@ -11,6 +11,7 @@ import { expressFactoryAbi, type ListingParams } from '../abi/expressFactory'
 import { env } from '../config/env'
 import { useOnCorrectChain } from '../gate/ChainGuard'
 import { utf8DeclaredUse } from '../mining/create2'
+import { verifyTokenVanityParity } from '../mining/mineVanity'
 import { Stamp } from '../shell/Stamp'
 import { useToast } from '../shell/Toast'
 import { Win95Window } from '../shell/Window'
@@ -62,6 +63,10 @@ export function LaunchHost({
   const bufferWei = listBufferWei()
   const [gasEst, setGasEst] = useState<ListCostEstimate | null>(null)
   const [gasFetchFailed, setGasFetchFailed] = useState(false)
+  const [liveEthUsdWad, setLiveEthUsdWad] = useState<bigint | null>(null)
+  const [vanityParityOk, setVanityParityOk] = useState<boolean | null>(null)
+  const [vanityParityDetail, setVanityParityDetail] = useState<string>('')
+  const [vanityParityRan, setVanityParityRan] = useState(false)
 
   useEffect(() => {
     if (!formOpen && !precheckOpen) return
@@ -80,6 +85,18 @@ export function LaunchHost({
           setGasFetchFailed(true)
         }
       }
+      if (factoryAddr) {
+        try {
+          const wad = await publicClient.readContract({
+            address: factoryAddr,
+            abi: expressFactoryAbi,
+            functionName: 'currentEthUsdWad',
+          })
+          if (!cancelled) setLiveEthUsdWad(wad)
+        } catch {
+          if (!cancelled) setLiveEthUsdWad(null)
+        }
+      }
     }
     void refresh()
     const id = window.setInterval(() => void refresh(), 30_000)
@@ -87,7 +104,62 @@ export function LaunchHost({
       cancelled = true
       window.clearInterval(id)
     }
-  }, [formOpen, precheckOpen, publicClient, bufferWei])
+  }, [formOpen, precheckOpen, publicClient, bufferWei, factoryAddr])
+
+  // One-time token-vanity triple parity (worker/RLP ↔ viem ↔ factory eth_call).
+  useEffect(() => {
+    if (!formOpen || vanityParityRan || !publicClient || !factoryAddr || !address) {
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        // Minimal params for initCodeHash — stamps overwrite on-chain.
+        const p: ListingParams = {
+          startMcap: TIER_4K,
+          totalSupply: DEFAULT_SUPPLY,
+          creatorReserveBps: 0,
+          deliveryMode: 0,
+          vestDuration: 0n,
+          declaredUse: ('0x' + '00'.repeat(32)) as `0x${string}`,
+          creator: address,
+          name: 'parity',
+          symbol: 'PRTY',
+          createSidePool: true,
+          sidePoolBps: 500,
+          liquidityLocked: true,
+          refPriceWad: 0n,
+          ethUsdWad: 0n,
+        }
+        const initCodeHash = await publicClient.readContract({
+          address: factoryAddr,
+          abi: expressFactoryAbi,
+          functionName: 'listingInitCodeHash',
+          args: [p],
+        })
+        const result = await verifyTokenVanityParity({
+          factory: factoryAddr,
+          deployer: address,
+          initCodeHash,
+          publicClient,
+        })
+        if (cancelled) return
+        setVanityParityRan(true)
+        setVanityParityOk(result.ok)
+        setVanityParityDetail(result.detail)
+      } catch (err) {
+        if (cancelled) return
+        setVanityParityRan(true)
+        setVanityParityOk(false)
+        setVanityParityDetail(
+          err instanceof Error ? err.message : String(err),
+        )
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [formOpen, vanityParityRan, publicClient, factoryAddr, address])
 
   const [name, setName] = useState('STONK')
   const [symbol, setSymbol] = useState('STNK')
@@ -318,7 +390,7 @@ export function LaunchHost({
     Boolean(factoryAddr)
 
   useEffect(() => {
-    if (launch.step === 'mine') toast.push('mining vanity salt…', 'info')
+    if (launch.step === 'mine') toast.push('mining your 0x4663 token address…', 'info')
     else if (launch.step === 'simulate') toast.push('simulating list()…', 'info')
     else if (launch.step === 'write') toast.push('awaiting wallet…', 'info')
     else if (launch.step === 'receipt') toast.push('waiting for receipt…', 'info')
@@ -347,6 +419,8 @@ export function LaunchHost({
     // Stamped fields: factory overwrites at list/initCodeHash (NOTES.md 0f).
     // We still send current form values; chain stamps createSidePool/sidePoolBps/
     // liquidityLocked/refPriceWad from DeployControls defaults.
+    // Express `_stampListingParams`: `p.ethUsdWad = currentEthUsdWad();` —
+    // unconditional overwrite; caller value is ignored (send 0).
     return {
       startMcap: tier === '4k' ? TIER_4K : TIER_8K,
       totalSupply,
@@ -362,6 +436,7 @@ export function LaunchHost({
       sidePoolBps,
       liquidityLocked,
       refPriceWad: 0n, // stamped when createSidePool
+      ethUsdWad: 0n, // stamped via currentEthUsdWad() on Express path
     }
   }
 
@@ -574,6 +649,18 @@ export function LaunchHost({
                 {gasFetchFailed && (
                   <p className="check bad">could not read gas price</p>
                 )}
+                {liveEthUsdWad !== null && (
+                  <p className="hint">
+                    tier conversion at ~
+                    {(Number(liveEthUsdWad) / 1e18).toFixed(2)}/ETH (read
+                    on-chain from two reference pools at filing time)
+                  </p>
+                )}
+                {liveEthUsdWad === null && formOpen && (
+                  <p className="hint">
+                    ETH/USD stamp will be read from the factory at filing
+                  </p>
+                )}
                 <p className="hint">
                   excess above actual consumption stays on the listing contract
                   — the default carries ~10x margin, so worst-case excess is
@@ -582,10 +669,16 @@ export function LaunchHost({
               </div>
             )}
 
+            {vanityParityOk === false && (
+              <p className="check bad">
+                token vanity self-test failed — mining disabled. {vanityParityDetail}
+              </p>
+            )}
+
             <button
               type="button"
               className="btn95 go"
-              disabled={!canSubmit}
+              disabled={!canSubmit || vanityParityOk === false}
               onClick={() => void launch.run(buildParams())}
             >
               {busy ? 'working…' : 'mine + list'}
@@ -595,7 +688,7 @@ export function LaunchHost({
               <div className={mining ? 'crt-mine' : 'pipeline'}>
                 {mining && (
                   <p className="crt-line">
-                    VANITY MINE · attempts {attempts ?? '…'}
+                    TOKEN VANITY MINE · attempts {attempts ?? '…'}
                   </p>
                 )}
                 {launch.status && <p className="status">{launch.status}</p>}
@@ -607,6 +700,9 @@ export function LaunchHost({
                 )}
                 {launch.selfTestLine && (
                   <p className="hint">{launch.selfTestLine}</p>
+                )}
+                {vanityParityOk && vanityParityDetail && (
+                  <p className="hint">{vanityParityDetail}</p>
                 )}
                 {launch.error && <p className="check bad">{launch.error}</p>}
               </div>

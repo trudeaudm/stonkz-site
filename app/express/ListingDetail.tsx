@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { formatEther, getAddress, type Address } from 'viem'
 import { useBlock, usePublicClient } from 'wagmi'
+import { directListingAbi } from '../abi/directListing'
 import { env } from '../config/env'
 import { HelthBar } from '../shell/HelthBar'
 import { Stamp } from '../shell/Stamp'
@@ -37,6 +38,7 @@ export function TokenWindow({
   const factory = env.addrExpressFactory
   const [record, setRecord] = useState<IndexedListing | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [ethUsdWad, setEthUsdWad] = useState<bigint | null>(null)
   const block = useBlock({ watch: true })
 
   useEffect(() => {
@@ -80,6 +82,27 @@ export function TokenWindow({
       saveEnvelope(envl)
     }
   }, [client, factory, record])
+
+  useEffect(() => {
+    if (!client || !record) return
+    let cancelled = false
+    void (async () => {
+      try {
+        // V2 listings only — indexer is per-factory so V1 rows never appear once env flips; no shim.
+        const wad = await client.readContract({
+          address: getAddress(record.listing),
+          abi: directListingAbi,
+          functionName: 'ethUsdWad',
+        })
+        if (!cancelled) setEthUsdWad(wad)
+      } catch {
+        if (!cancelled) setEthUsdWad(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [client, record])
 
   useEffect(() => {
     void refresh()
@@ -159,6 +182,13 @@ export function TokenWindow({
       <p>start mcap {tierLabel(record.startMcap)}</p>
       <p>start price {record.startPriceWad} wad (at launch)</p>
       <p>total supply {record.totalSupply} raw</p>
+      {/* V2 listings only — indexer is per-factory so V1 rows never appear once env flips; no shim. */}
+      {ethUsdWad !== null && (
+        <div className="dr">
+          <span>stamped ETH/USD</span>
+          <b>~{(Number(ethUsdWad) / 1e18).toFixed(2)}/ETH</b>
+        </div>
+      )}
       <div className="rule" />
       <p>
         creator reserve {record.creatorReserve} raw · delivery {mode}

@@ -19,6 +19,7 @@ import { env } from '../config/env'
 import {
   matchesVanityPrefix,
   predictListingAddressLocal,
+  predictTokenAddressLocal,
 } from '../mining/create2'
 import { mineVanitySalt } from '../mining/mineVanity'
 
@@ -57,6 +58,8 @@ export type LaunchReceipt = {
   sidePoolBps: number
   liquidityLocked: boolean
   sidePoolDeployed: boolean
+  /** Immutable stamp from listing.ethUsdWad() — Express V2 only. */
+  ethUsdWad: bigint
   listed?: bigint
   sidePoolTokens?: bigint
   instant?: boolean
@@ -138,6 +141,15 @@ export function formatPipelineError(err: unknown, bufferWei?: bigint): string {
     const n = (bufferWei ?? listBufferWei()).toString()
     return `listing creation failed inside the factory — most likely an insufficient settle buffer. buffer sent: ${n} wei.`
   }
+  if (name === 'RefPoolsDisagree') {
+    return 'the two ETH/USD reference pools disagree beyond tolerance — launches are paused until they re-converge'
+  }
+  if (name === 'RefPoolEmpty') {
+    return 'a reference pool has no liquidity — launches paused'
+  }
+  if (name === 'EthUsdUnset' || name === 'EthUsdOutOfBand' || name === 'RefPoolUnset') {
+    return 'ETH/USD reference not configured'
+  }
   if (name) return name
 
   const raw = extractRawRevertData(err)
@@ -200,10 +212,10 @@ export function useLaunch() {
           args: [p],
         })
 
-        // 3. mine salt
+        // 3. mine salt (vanity on TOKEN address — Express V2)
         current = 'mine'
         setStep(current)
-        setStatus('3/7 mining your 0x4663 address…')
+        setStatus('3/7 mining your 0x4663 token address…')
         const mined = await mineVanitySalt({
           factory,
           deployer: address,
@@ -224,32 +236,41 @@ export function useLaunch() {
           `found in ${mined.attempts.toLocaleString()} attempts (${mined.mode})`,
         )
         setSelfTestLine(
-          `self-test: salt=${mined.selfTest.userSalt} → ${mined.selfTest.address}`,
+          `self-test: salt=${mined.selfTest.userSalt} → listing=${mined.selfTest.listing} token=${mined.selfTest.token}`,
         )
 
-        // 4. on-chain verify predictListingAddress
+        // 4. on-chain verify predictListingAddress + predictTokenAddress
         current = 'verify'
         setStep(current)
-        setStatus('4/7 on-chain predictListingAddress verify')
-        const onChain = await publicClient.readContract({
+        setStatus('4/7 on-chain listing+token predict verify')
+        const onChainListing = await publicClient.readContract({
           address: factory,
           abi: expressFactoryAbi,
           functionName: 'predictListingAddress',
           args: [address, mined.userSalt, initCodeHash],
         })
-        const local = predictListingAddressLocal(
+        const localListing = predictListingAddressLocal(
           factory,
           address,
           mined.userSalt,
           initCodeHash,
         )
+        const onChainToken = await publicClient.readContract({
+          address: factory,
+          abi: expressFactoryAbi,
+          functionName: 'predictTokenAddress',
+          args: [onChainListing],
+        })
+        const localToken = predictTokenAddressLocal(localListing)
         if (
-          onChain.toLowerCase() !== mined.predicted.toLowerCase() ||
-          onChain.toLowerCase() !== local.toLowerCase() ||
-          !matchesVanityPrefix(onChain)
+          onChainListing.toLowerCase() !== mined.predictedListing.toLowerCase() ||
+          onChainListing.toLowerCase() !== localListing.toLowerCase() ||
+          onChainToken.toLowerCase() !== mined.predictedToken.toLowerCase() ||
+          onChainToken.toLowerCase() !== localToken.toLowerCase() ||
+          !matchesVanityPrefix(onChainToken)
         ) {
           throw new Error(
-            `predict verify failed: onChain=${onChain} mined=${mined.predicted} local=${local}`,
+            `predict verify failed: listing onChain=${onChainListing} mined=${mined.predictedListing} local=${localListing}; token onChain=${onChainToken} mined=${mined.predictedToken} local=${localToken}`,
           )
         }
 
@@ -365,6 +386,7 @@ export function useLaunch() {
           sidePoolBps,
           liquidityLocked,
           sidePoolDeployed,
+          ethUsdWad,
         ] = await Promise.all([
           publicClient.readContract({
             address: listing,
@@ -411,6 +433,11 @@ export function useLaunch() {
             abi: directListingAbi,
             functionName: 'sidePoolDeployed',
           }),
+          publicClient.readContract({
+            address: listing,
+            abi: directListingAbi,
+            functionName: 'ethUsdWad',
+          }),
         ])
 
         setReceipt({
@@ -432,6 +459,7 @@ export function useLaunch() {
           sidePoolBps: sidePoolBpsEvt ?? sidePoolBps,
           liquidityLocked: liquidityLockedEvt ?? liquidityLocked,
           sidePoolDeployed,
+          ethUsdWad,
           listed,
           sidePoolTokens,
           instant,
