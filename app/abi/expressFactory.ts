@@ -1,11 +1,14 @@
 /**
- * Minimal Express factory ABI — field order pinned to NOTES.md 0f + Express V2.
+ * Minimal Express factory ABI — field order pinned to NOTES.md 0f + Express V3.
  * No address literals; consumers pass env.addrExpressFactory.
  *
  * ListingParams (verbatim StonkzDirectListing.sol @ fix/express-pricing):
  *   startMcap, totalSupply, creatorReserveBps, deliveryMode, vestDuration,
  *   declaredUse, creator, name, symbol, createSidePool, sidePoolBps,
  *   liquidityLocked, refPriceWad, ethUsdWad
+ *
+ * V3: ethUsdWad is caller-supplied and band-validated (EthUsdStampDrift);
+ * init-code hash is deterministic during mining.
  */
 const listingParamsComponents = [
   { name: 'startMcap', type: 'uint256' },
@@ -86,6 +89,13 @@ export const expressFactoryAbi = [
     stateMutability: 'view',
     inputs: [],
     outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'ethUsdStampBandBps',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint16' }],
   },
   {
     type: 'function',
@@ -268,6 +278,15 @@ export const expressFactoryAbi = [
       { name: 'bound', type: 'uint256' },
     ],
   },
+  // Express V3 — caller-supplied ethUsdWad vs live (± ethUsdStampBandBps)
+  {
+    type: 'error',
+    name: 'EthUsdStampDrift',
+    inputs: [
+      { name: 'supplied', type: 'uint256' },
+      { name: 'current', type: 'uint256' },
+    ],
+  },
   // deployed factory (disk build) — see stonkz-deployed-truth.md Part 3; absent at repo HEAD
   // selector 0x08586462
   { type: 'error', name: 'ListingCreateFailed', inputs: [] },
@@ -314,6 +333,6 @@ export type ListingParams = {
   sidePoolBps: number
   liquidityLocked: boolean
   refPriceWad: bigint
-  /** Caller sends 0; Express `_stampListingParams` sets `p.ethUsdWad = currentEthUsdWad()`. */
+  /** Caller-supplied ETH/USD WAD (Express V3); band-validated on list(). */
   ethUsdWad: bigint
 }

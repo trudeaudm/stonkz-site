@@ -115,12 +115,12 @@ export async function mineVanitySalt(args: {
   deployer: Address
   initCodeHash: Hex
   handlers?: MineHandlers
-  /** Required — refuse mining against a non-v2 (or unfingerprinted) factory. */
-  factoryIsV2: boolean
+  /** Required — refuse mining against a non-v3 (or unfingerprinted) factory. */
+  factoryIsV3: boolean
 }): Promise<MineResult> {
-  if (!args.factoryIsV2) {
+  if (!args.factoryIsV3) {
     throw new Error(
-      'miner refused: factory fingerprint is not v2 — DO NOT FILE. env or deploy is stale.',
+      'miner refused: factory fingerprint is not v3 — DO NOT FILE. env or deploy is stale.',
     )
   }
   const expectedListing = predictListingAddressLocal(

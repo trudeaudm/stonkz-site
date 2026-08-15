@@ -1,47 +1,40 @@
 /**
- * Express factory fingerprint — V2 answers predictTokenAddress; V1/unknown revert.
+ * Express factory fingerprint — V3 answers ethUsdStampBandBps; V2/V1/unknown revert.
  */
-import {
-  getAddress,
-  pad,
-  toHex,
-  type Address,
-  type PublicClient,
-} from 'viem'
+import { type Address, type PublicClient } from 'viem'
 import { expressFactoryAbi } from '../abi/expressFactory'
 import { env } from '../config/env'
 
+/** Same hard-block copy as step 15 — stale env / orphaned factory. */
 export const FACTORY_V2_FAIL_COPY =
   'this build points at a factory without v2 pricing — DO NOT FILE. env or deploy is stale.'
-
-/** Probe address for predictTokenAddress — any 20-byte value works; result discarded. */
-const FINGERPRINT_PROBE = getAddress(pad(toHex(1), { size: 20 }))
 
 export function shortFactory(addr: Address): string {
   return `0x${addr.slice(2, 6)}…${addr.slice(-4)}`
 }
 
-export function factoryV2PassCopy(addr: Address): string {
-  return `factory ${shortFactory(addr)} — v2 (usd tiers, token vanity)`
+export function factoryV3PassCopy(addr: Address, bandBps: bigint): string {
+  return `factory ${shortFactory(addr)} — v3 (supplied rate, drift band ${bandBps.toString()} bps)`
 }
 
 /**
- * Returns true when the configured factory implements predictTokenAddress (Express V2).
- * V1 and unknown contracts revert / return empty → false.
+ * Returns drift band (bps) when the configured factory is Express V3.
+ * V2 / V1 / unknown revert on ethUsdStampBandBps → null.
  */
-export async function fingerprintExpressFactoryV2(
+export async function fingerprintExpressFactoryV3(
   client: PublicClient,
   factory: Address = env.addrExpressFactory!,
-): Promise<boolean> {
+): Promise<bigint | null> {
   try {
-    const predicted = await client.readContract({
+    const band = await client.readContract({
       address: factory,
       abi: expressFactoryAbi,
-      functionName: 'predictTokenAddress',
-      args: [FINGERPRINT_PROBE],
+      functionName: 'ethUsdStampBandBps',
     })
-    return typeof predicted === 'string' && /^0x[a-fA-F0-9]{40}$/.test(predicted)
+    if (typeof band === 'bigint') return band
+    if (typeof band === 'number' && Number.isFinite(band)) return BigInt(band)
+    return null
   } catch {
-    return false
+    return null
   }
 }

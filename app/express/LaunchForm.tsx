@@ -19,8 +19,8 @@ import { useWindowManager } from '../shell/windowManager'
 import { Receipt } from './Receipt'
 import {
   FACTORY_V2_FAIL_COPY,
-  factoryV2PassCopy,
-  fingerprintExpressFactoryV2,
+  factoryV3PassCopy,
+  fingerprintExpressFactoryV3,
 } from './factoryFingerprint'
 import {
   formatEthSig,
@@ -72,19 +72,21 @@ export function LaunchHost({
   const [vanityParityOk, setVanityParityOk] = useState<boolean | null>(null)
   const [vanityParityDetail, setVanityParityDetail] = useState<string>('')
   const [vanityParityRan, setVanityParityRan] = useState(false)
-  /** null = probing; true = V2; false = stale/unknown factory */
-  const [factoryIsV2, setFactoryIsV2] = useState<boolean | null>(null)
+  /** null = probing; bigint = V3 band bps; false = stale factory */
+  const [factoryBandBps, setFactoryBandBps] = useState<bigint | null | false>(
+    null,
+  )
 
   useEffect(() => {
     if (!formOpen && !precheckOpen) return
     if (!publicClient || !factoryAddr) {
-      setFactoryIsV2(null)
+      setFactoryBandBps(null)
       return
     }
     let cancelled = false
     void (async () => {
-      const ok = await fingerprintExpressFactoryV2(publicClient, factoryAddr)
-      if (!cancelled) setFactoryIsV2(ok)
+      const band = await fingerprintExpressFactoryV3(publicClient, factoryAddr)
+      if (!cancelled) setFactoryBandBps(band == null ? false : band)
     })()
     return () => {
       cancelled = true
@@ -310,23 +312,23 @@ export function LaunchHost({
     const list: Check[] = []
 
     if (factoryAddr) {
-      if (factoryIsV2 === null) {
+      if (factoryBandBps === null) {
         list.push({
           ok: false,
           label: 'factoryFingerprint',
           detail: 'probing factory fingerprint…',
         })
-      } else if (factoryIsV2) {
-        list.push({
-          ok: true,
-          label: 'factoryFingerprint',
-          detail: factoryV2PassCopy(factoryAddr),
-        })
-      } else {
+      } else if (factoryBandBps === false) {
         list.push({
           ok: false,
           label: 'factoryFingerprint',
           detail: FACTORY_V2_FAIL_COPY,
+        })
+      } else {
+        list.push({
+          ok: true,
+          label: 'factoryFingerprint',
+          detail: factoryV3PassCopy(factoryAddr, factoryBandBps),
         })
       }
     }
@@ -410,7 +412,7 @@ export function LaunchHost({
     return list
   }, [
     factoryAddr,
-    factoryIsV2,
+    factoryBandBps,
     deploysEnabled,
     allowlistCount,
     allowed.data,
@@ -432,7 +434,7 @@ export function LaunchHost({
     onCorrectChain &&
     formValid &&
     allGreen &&
-    factoryIsV2 === true &&
+    typeof factoryBandBps === 'bigint' &&
     !pairHardFail &&
     !busy &&
     Boolean(address) &&
@@ -465,11 +467,10 @@ export function LaunchHost({
 
   function buildParams(): ListingParams {
     if (!address) throw new Error('no address')
-    // Stamped fields: factory overwrites at list/initCodeHash (NOTES.md 0f).
-    // We still send current form values; chain stamps createSidePool/sidePoolBps/
-    // liquidityLocked/refPriceWad from DeployControls defaults.
-    // Express `_stampListingParams`: `p.ethUsdWad = currentEthUsdWad();` —
-    // unconditional overwrite; caller value is ignored (send 0).
+    // Stamped fields: factory overwrites createSidePool/sidePoolBps/
+    // liquidityLocked/refPriceWad from DeployControls defaults at list/initCodeHash.
+    // ethUsdWad is caller-supplied on V3 — useLaunch reads currentEthUsdWad() and
+    // overlays it before mining (form value is a placeholder only).
     return {
       startMcap: tier === '4k' ? TIER_4K : TIER_8K,
       totalSupply,
@@ -485,7 +486,7 @@ export function LaunchHost({
       sidePoolBps,
       liquidityLocked,
       refPriceWad: 0n, // stamped when createSidePool
-      ethUsdWad: 0n, // stamped via currentEthUsdWad() on Express path
+      ethUsdWad: liveEthUsdWad ?? 0n, // useLaunch re-reads + overlays at run
     }
   }
 
@@ -698,16 +699,19 @@ export function LaunchHost({
                 {gasFetchFailed && (
                   <p className="check bad">could not read gas price</p>
                 )}
-                {liveEthUsdWad !== null && (
+                {liveEthUsdWad !== null &&
+                  typeof factoryBandBps === 'bigint' && (
                   <p className="hint">
-                    tier conversion at ~
-                    {(Number(liveEthUsdWad) / 1e18).toFixed(2)}/ETH (read
-                    on-chain from two reference pools at filing time)
+                    tier conversion at $
+                    {(Number(liveEthUsdWad) / 1e18).toFixed(2)}
+                    /ETH — you are filing this rate; the chain accepts it
+                    within ±{Number(factoryBandBps) / 100}% of its own
+                    reading.
                   </p>
                 )}
                 {liveEthUsdWad === null && formOpen && (
                   <p className="hint">
-                    ETH/USD stamp will be read from the factory at filing
+                    reading live ETH/USD from the factory…
                   </p>
                 )}
                 <p className="hint">
