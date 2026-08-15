@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { formatEther, parseEther, zeroAddress, type Address } from 'viem'
-import { useAccount, useBalance, useReadContract, useReadContracts } from 'wagmi'
+import { formatEther, zeroAddress, type Address } from 'viem'
+import {
+  useAccount,
+  useBalance,
+  usePublicClient,
+  useReadContract,
+  useReadContracts,
+} from 'wagmi'
 import { expressFactoryAbi, type ListingParams } from '../abi/expressFactory'
 import { env } from '../config/env'
 import { useOnCorrectChain } from '../gate/ChainGuard'
@@ -10,6 +16,11 @@ import { useToast } from '../shell/Toast'
 import { Win95Window } from '../shell/Window'
 import { useWindowManager } from '../shell/windowManager'
 import { Receipt } from './Receipt'
+import {
+  formatEthSig,
+  getListCostEstimate,
+  type ListCostEstimate,
+} from './gasEstimate'
 import { listBufferWei, useLaunch } from './useLaunch'
 
 const TIER_4K = 4000n * 10n ** 18n
@@ -17,8 +28,6 @@ const TIER_8K = 8000n * 10n ** 18n
 const DEFAULT_SUPPLY = 1_000_000n * 10n ** 18n
 const SIDE_POOL_BPS_MAX = 2000
 const CREATOR_RESERVE_BPS_MAX = 10_000 // NOTES.md 0h — bps of total supply; no named on-chain max
-/** Gas headroom for balance precheck (not a fee quote). */
-const GAS_HEADROOM_WEI = parseEther('0.02')
 
 function factory(): Address | undefined {
   return env.addrExpressFactory
@@ -47,13 +56,38 @@ export function LaunchHost({
   const factoryAddr = factory()
   const launch = useLaunch()
   const toast = useToast()
+  const publicClient = usePublicClient()
   const { open, close: closeWin } = useWindowManager()
   const balance = useBalance({ address, query: { enabled: Boolean(address) } })
   const bufferWei = listBufferWei()
-  const bufferLabel =
-    bufferWei >= 10n ** 12n
-      ? `${bufferWei.toString()} wei (${formatEther(bufferWei)} ETH)`
-      : `${bufferWei.toString()} wei`
+  const [gasEst, setGasEst] = useState<ListCostEstimate | null>(null)
+  const [gasFetchFailed, setGasFetchFailed] = useState(false)
+
+  useEffect(() => {
+    if (!formOpen && !precheckOpen) return
+    if (!publicClient) return
+    let cancelled = false
+    const refresh = async () => {
+      try {
+        const est = await getListCostEstimate(publicClient, bufferWei)
+        if (!cancelled) {
+          setGasEst(est)
+          setGasFetchFailed(false)
+        }
+      } catch {
+        if (!cancelled) {
+          setGasEst(null)
+          setGasFetchFailed(true)
+        }
+      }
+    }
+    void refresh()
+    const id = window.setInterval(() => void refresh(), 30_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [formOpen, precheckOpen, publicClient, bufferWei])
 
   const [name, setName] = useState('STONK')
   const [symbol, setSymbol] = useState('STNK')
@@ -230,16 +264,29 @@ export function LaunchHost({
     }
 
     if (pairToken === zeroAddress) {
-      const need = bufferWei + GAS_HEADROOM_WEI
-      const bal = balance.data?.value
-      const funded = bal !== undefined && bal >= need
-      list.push({
-        ok: funded,
-        label: 'ethBufferBalance',
-        detail: funded
-          ? `balance covers ${bufferLabel} settle buffer + ${formatEther(GAS_HEADROOM_WEI)} ETH gas headroom`
-          : `need ≥ ${bufferLabel} settle buffer + ${formatEther(GAS_HEADROOM_WEI)} ETH gas headroom (have ${bal !== undefined ? formatEther(bal) : '—'} ETH)`,
-      })
+      if (gasFetchFailed) {
+        list.push({
+          ok: false,
+          label: 'gasPrice',
+          detail: 'could not read gas price',
+        })
+      } else if (!gasEst) {
+        list.push({
+          ok: false,
+          label: 'ethCostEstimate',
+          detail: 'estimating settle + gas cost…',
+        })
+      } else {
+        const bal = balance.data?.value
+        const funded = bal !== undefined && bal >= gasEst.requiredWei
+        const have =
+          bal !== undefined ? formatEther(bal) : '—'
+        list.push({
+          ok: funded,
+          label: 'ethCostEstimate',
+          detail: `need ≈ ${formatEthSig(gasEst.requiredWei)} ETH (settle buffer ${bufferWei.toString()} wei + gas ≈ ${formatEthSig(gasEst.gasCostWei)} ETH at current prices) — have ${have} ETH · estimate`,
+        })
+      }
     }
 
     return list
@@ -253,8 +300,9 @@ export function LaunchHost({
     sideTokenRef,
     refConfigured.data,
     bufferWei,
-    bufferLabel,
     balance.data?.value,
+    gasEst,
+    gasFetchFailed,
   ])
 
   const allGreen = checks.every((c) => c.ok)
@@ -515,6 +563,17 @@ export function LaunchHost({
                   this launch sends {bufferWei.toString()} wei as a settle
                   buffer (goes to the pool manager; measured, not guessed)
                 </p>
+                {gasEst && (
+                  <p className="hint">
+                    estimate total ≈ {formatEthSig(gasEst.requiredWei)} ETH
+                    (buffer {bufferWei.toString()} wei + gas ≈{' '}
+                    {formatEthSig(gasEst.gasCostWei)} ETH at current prices,
+                    1.5× gas margin)
+                  </p>
+                )}
+                {gasFetchFailed && (
+                  <p className="check bad">could not read gas price</p>
+                )}
                 <p className="hint">
                   excess above actual consumption stays on the listing contract
                   — the default carries ~10x margin, so worst-case excess is
