@@ -176,6 +176,22 @@ export const expressFactoryAbi = [
     inputs: [],
     outputs: [{ type: 'address' }],
   },
+  // deployed factory (disk build) — see stonkz-deployed-truth.md Part 3; absent at repo HEAD
+  {
+    type: 'function',
+    name: 'listingCreationPtr0',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  // deployed factory (disk build) — see stonkz-deployed-truth.md Part 3; absent at repo HEAD
+  {
+    type: 'function',
+    name: 'listingCreationPtr1',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
   {
     type: 'event',
     name: 'ExpressListed',
@@ -219,6 +235,31 @@ export const expressFactoryAbi = [
       { name: 'pairCurrency', type: 'address' },
     ],
   },
+  // deployed factory (disk build) — see stonkz-deployed-truth.md Part 3; absent at repo HEAD
+  // selector 0x08586462
+  { type: 'error', name: 'ListingCreateFailed', inputs: [] },
+  // deployed factory (disk build) — see stonkz-deployed-truth.md Part 3; absent at repo HEAD
+  // selector 0x2947850f — decode-only; shared so a future ladder module inherits it
+  { type: 'error', name: 'AuctionCreateFailed', inputs: [] },
+  // deployed factory (disk build) — see stonkz-deployed-truth.md Part 3; absent at repo HEAD
+  // bubbled from CreationCodeStore
+  { type: 'error', name: 'EmptyCreationCode', inputs: [] },
+  // deployed factory (disk build) — see stonkz-deployed-truth.md Part 3; absent at repo HEAD
+  { type: 'error', name: 'CreationCodeTooLarge', inputs: [] },
+  // deployed factory (disk build) — see stonkz-deployed-truth.md Part 3; absent at repo HEAD
+  { type: 'error', name: 'CreationCodePointerMissing', inputs: [] },
+] as const
+
+/**
+ * Shared create / CreationCodeStore errors — Express consumes them today;
+ * ladder modules should spread this list for AuctionCreateFailed decode.
+ * Provenance: deployed factory (disk build) — see stonkz-deployed-truth.md Part 3; absent at repo HEAD.
+ */
+export const sharedFactoryCreateErrors = [
+  { type: 'error', name: 'AuctionCreateFailed', inputs: [] },
+  { type: 'error', name: 'EmptyCreationCode', inputs: [] },
+  { type: 'error', name: 'CreationCodeTooLarge', inputs: [] },
+  { type: 'error', name: 'CreationCodePointerMissing', inputs: [] },
 ] as const
 
 export const expressListedEvent = expressFactoryAbi.find(

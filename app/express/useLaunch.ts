@@ -68,30 +68,87 @@ function factoryAddress(): Address {
   return a
 }
 
-function errName(err: unknown): string {
-  if (!err || typeof err !== 'object') return String(err)
-  const e = err as {
-    name?: string
-    shortMessage?: string
-    message?: string
-    walk?: (fn: (x: Error) => boolean) => Error | null
-    cause?: unknown
-  }
-  // wagmi/viem ContractFunctionRevertedError
-  const meta = err as { data?: { errorName?: string }; errorName?: string }
-  if (meta.errorName) return meta.errorName
-  if (meta.data?.errorName) return meta.data.errorName
+function extractErrorName(err: unknown): string | undefined {
   let cur: unknown = err
-  for (let i = 0; i < 8 && cur; i++) {
-    if (typeof cur === 'object' && cur && 'data' in cur) {
-      const d = (cur as { data?: { errorName?: string } }).data
-      if (d?.errorName) return d.errorName
+  for (let i = 0; i < 10 && cur; i++) {
+    if (typeof cur === 'object' && cur) {
+      const o = cur as {
+        errorName?: string
+        data?: { errorName?: string; errorSignature?: string }
+      }
+      if (typeof o.errorName === 'string' && o.errorName) return o.errorName
+      if (typeof o.data?.errorName === 'string' && o.data.errorName) {
+        return o.data.errorName
+      }
     }
     if (typeof cur === 'object' && cur && 'cause' in cur) {
       cur = (cur as { cause: unknown }).cause
     } else break
   }
+  return undefined
+}
+
+/** Raw revert payload hex if present (selector + data). */
+function extractRawRevertData(err: unknown): `0x${string}` | undefined {
+  let cur: unknown = err
+  for (let i = 0; i < 10 && cur; i++) {
+    if (typeof cur === 'object' && cur) {
+      const o = cur as {
+        data?: unknown
+        raw?: unknown
+        cause?: unknown
+      }
+      const candidates = [o.data, o.raw]
+      for (const c of candidates) {
+        if (typeof c === 'string' && c.startsWith('0x') && c.length >= 10) {
+          return c as `0x${string}`
+        }
+        if (
+          c &&
+          typeof c === 'object' &&
+          'data' in c &&
+          typeof (c as { data: unknown }).data === 'string'
+        ) {
+          const d = (c as { data: string }).data
+          if (d.startsWith('0x') && d.length >= 10) return d as `0x${string}`
+        }
+      }
+    }
+    if (typeof cur === 'object' && cur && 'cause' in cur) {
+      cur = (cur as { cause: unknown }).cause
+    } else break
+  }
+  return undefined
+}
+
+/**
+ * Decode simulate/write failures using the full factory ABI surface.
+ * Known names returned as-is; ListingCreateFailed mapped to buffer copy;
+ * unrecognized reverts surface raw selector + data (never a silent generic).
+ */
+export function formatPipelineError(err: unknown, bufferWei?: bigint): string {
+  if (!err || typeof err !== 'object') return String(err)
+  const e = err as {
+    name?: string
+    shortMessage?: string
+    message?: string
+  }
+  const name = extractErrorName(err)
+  if (name === 'ListingCreateFailed') {
+    const n = (bufferWei ?? listBufferWei()).toString()
+    return `listing creation failed inside the factory — most likely an insufficient settle buffer. buffer sent: ${n} wei.`
+  }
+  if (name) return name
+
+  const raw = extractRawRevertData(err)
+  if (raw) {
+    return `unrecognized revert selector=${raw.slice(0, 10)} data=${raw}`
+  }
   return e.shortMessage ?? e.message ?? e.name ?? String(err)
+}
+
+function errName(err: unknown, bufferWei?: bigint): string {
+  return formatPipelineError(err, bufferWei)
 }
 
 export function useLaunch() {
@@ -124,6 +181,7 @@ export function useLaunch() {
 
       const factory = factoryAddress()
       let current: PipelineStep = 'idle'
+      let attachedValue = 0n
       try {
         // 1. build ListingParams (already ordered by caller per NOTES.md 0f)
         current = 'build'
@@ -205,6 +263,7 @@ export function useLaunch() {
           functionName: 'pairToken',
         })
         const value = pairToken === zeroAddress ? listBufferWei() : 0n
+        attachedValue = value
 
         try {
           await publicClient.simulateContract({
@@ -216,7 +275,7 @@ export function useLaunch() {
             value,
           })
         } catch (simErr) {
-          throw new Error(`simulate: ${errName(simErr)}`)
+          throw new Error(`simulate: ${errName(simErr, attachedValue)}`)
         }
 
         // 6. write + wait receipt
@@ -381,8 +440,14 @@ export function useLaunch() {
         setStatus('done')
       } catch (err) {
         setStep('error')
-        setError(`${current}: ${errName(err)}`)
-        setStatus(`halted at ${current}: ${errName(err)}`)
+        const msg = errName(err, attachedValue)
+        // Prefer nested simulate: message already formatted
+        const shown =
+          err instanceof Error && err.message.startsWith('simulate: ')
+            ? err.message.slice('simulate: '.length)
+            : msg
+        setError(`${current}: ${shown}`)
+        setStatus(`halted at ${current}: ${shown}`)
       }
     },
     [address, publicClient, writeContractAsync],

@@ -427,3 +427,28 @@ const value = pairToken === zeroAddress ? listBufferWei() : 0n
 // … simulateContract({ … value })
 // … writeContractAsync({ … value })
 ```
+
+---
+
+## CORRECTION 2026-08-14: deployed != HEAD
+
+Authority: `C:\Users\david\stonkz-deployed-truth.md` (read-only; not in this repo).
+
+Live **ExpressFactory**, **LadderFactory**, and **FeeHook** bytecode match the
+contracts repo's **dirty working-tree (disk) build**, not git HEAD. Broadcast
+`commit` stamps record HEAD while Foundry deployed from uncommitted sources
+(SSTORE2 listing/auction creation chunks; FeeHook 4-arg constructor).
+
+**Decode impact (this site):** failed CREATE2 on the live Express factory
+reverts `ListingCreateFailed()` (selector `0x08586462`), not HEAD's
+`assert(address(listing) == predicted)` / Panic(`0x01`). The Part-0a quote of
+that `assert` describes **HEAD source only** — corrected by reference here;
+do not treat it as live behavior.
+
+**Encode path unchanged:** `listingSalt` / `listingInitCodeHash` /
+`predictListingAddress` / `list` signatures and NOTES sections **0b–0f** and
+**0j** (measured wei consumption numbers) remain valid as verified by fork.
+Site ABI adds ptr getters + `ListingCreateFailed` + CreationCodeStore
+bubbled errors + shared `AuctionCreateFailed` for future ladder decode.
+
+See `stonkz-deployed-truth.md` Parts 2–3 for bytecode and ABI checklists.
