@@ -150,6 +150,15 @@ export function MyStuffWindow({
       onClose={onClose}
     >
       <div className="me-page">
+        <a
+          className="back btn95"
+          href="#/"
+          onClick={() => {
+            onClose()
+          }}
+        >
+          ← back to stonkz
+        </a>
         <div className="me-caption">MY STUFF. THE BAGS. THE GLORY.</div>
         <div className="grid2">
           <div>
@@ -184,15 +193,8 @@ export function MyStuffWindow({
               ))
             )}
           </div>
-          <div>
-            {/* League + flex_card deferred — layout spacer matches dummy grid. */}
-            <div className="win" style={{ minHeight: 120 }}>
-              <div className="body95 hint">
-                underwriters league + flex cards — not built yet. bags live on
-                the left.
-              </div>
-            </div>
-          </div>
+          {/* League + flex deferred — empty spacer keeps grid2 composition. */}
+          <div aria-hidden="true" />
         </div>
       </div>
     </Win95Window>

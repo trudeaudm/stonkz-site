@@ -13,11 +13,11 @@ function glyph(id: WinId): string {
 
 function routeFor(id: WinId): string | null {
   if (id === 'make_coin' || id === 'precheck' || id === 'certificate') {
-    return '#/launch'
+    return '#/make'
   }
   if (id === 'my_stuff') return '#/me'
   if (id.startsWith('token:')) {
-    return `#/l/${id.slice('token:'.length)}`
+    return `#/tok/${id.slice('token:'.length)}`
   }
   return null
 }

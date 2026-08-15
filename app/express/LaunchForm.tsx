@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatEther, zeroAddress, type Address } from 'viem'
 import {
   useAccount,
@@ -12,6 +12,7 @@ import { env } from '../config/env'
 import { useOnCorrectChain } from '../gate/ChainGuard'
 import { utf8DeclaredUse } from '../mining/create2'
 import { verifyTokenVanityParity } from '../mining/mineVanity'
+import { confetti } from '../shell/confetti'
 import { Stamp } from '../shell/Stamp'
 import { useToast } from '../shell/Toast'
 import { Win95Window } from '../shell/Window'
@@ -433,6 +434,8 @@ export function LaunchHost({
     Boolean(address) &&
     Boolean(factoryAddr)
 
+  const confettiFired = useRef(false)
+
   useEffect(() => {
     if (launch.step === 'mine') toast.push('mining your 0x4663 token address…', 'info')
     else if (launch.step === 'simulate') toast.push('simulating list()…', 'info')
@@ -444,6 +447,19 @@ export function LaunchHost({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- toast on step edges
   }, [launch.step])
+
+  useEffect(() => {
+    if (
+      (launch.step === 'done' || launch.receipt) &&
+      !confettiFired.current
+    ) {
+      confettiFired.current = true
+      confetti()
+    }
+    if (launch.step === 'idle' && !launch.receipt) {
+      confettiFired.current = false
+    }
+  }, [launch.step, launch.receipt])
 
   useEffect(() => {
     if (launch.receipt) {
@@ -524,6 +540,29 @@ export function LaunchHost({
           width={920}
           onClose={onCloseForm}
         >
+          <a
+            className="back btn95"
+            href="#/"
+            onClick={() => {
+              onCloseForm()
+            }}
+          >
+            ← back to stonkz
+          </a>
+          <div
+            className="caption"
+            style={{
+              fontSize: 'clamp(22px, 4vw, 32px)',
+              textAlign: 'left',
+              marginBottom: 14,
+              marginTop: 0,
+              color: '#101018',
+              WebkitTextStroke: 0,
+              textShadow: 'none',
+            }}
+          >
+            MAKE COIN. IS EASY. TAKE ONE MINUT.
+          </div>
           <div className={`wizard-grid ${!onCorrectChain ? 'disabled-surface' : ''}`}>
             <div className="launch-form">
               <div className="seg" role="group" aria-label="launch route">
@@ -640,51 +679,55 @@ export function LaunchHost({
                 </label>
               </fieldset>
 
-              <details className="creator-fold">
-                <summary>creator settings ▸</summary>
-                <label>
-                  creator reserve (bps of total supply, 0–10000)
-                  <input
-                    type="number"
-                    min={0}
-                    max={CREATOR_RESERVE_BPS_MAX}
-                    value={creatorReserveBps}
-                    onChange={(e) =>
-                      setCreatorReserveBps(Number(e.target.value))
-                    }
-                    disabled={!onCorrectChain}
-                  />
-                </label>
-                <fieldset disabled={!onCorrectChain}>
-                  <legend>delivery</legend>
-                  <label className="row">
+              <details className="win creator-fold">
+                <summary className="title" style={{ cursor: 'pointer' }}>
+                  🛠 dev_tools.exe
+                </summary>
+                <div className="body95">
+                  <label>
+                    creator reserve (bps of total supply, 0–10000)
                     <input
-                      type="radio"
-                      checked={delivery === 'instant'}
-                      onChange={() => setDelivery('instant')}
+                      type="number"
+                      min={0}
+                      max={CREATOR_RESERVE_BPS_MAX}
+                      value={creatorReserveBps}
+                      onChange={(e) =>
+                        setCreatorReserveBps(Number(e.target.value))
+                      }
+                      disabled={!onCorrectChain}
                     />
-                    INSTANT (10-minute timelock before claim)
                   </label>
-                  <label className="row">
-                    <input
-                      type="radio"
-                      checked={delivery === 'vest'}
-                      onChange={() => setDelivery('vest')}
-                    />
-                    VEST
-                  </label>
-                  {delivery === 'vest' && (
-                    <label>
-                      vest duration (days)
+                  <fieldset disabled={!onCorrectChain}>
+                    <legend>delivery</legend>
+                    <label className="row">
                       <input
-                        type="number"
-                        min={1}
-                        value={vestDays}
-                        onChange={(e) => setVestDays(Number(e.target.value))}
+                        type="radio"
+                        checked={delivery === 'instant'}
+                        onChange={() => setDelivery('instant')}
                       />
+                      INSTANT (10-minute timelock before claim)
                     </label>
-                  )}
-                </fieldset>
+                    <label className="row">
+                      <input
+                        type="radio"
+                        checked={delivery === 'vest'}
+                        onChange={() => setDelivery('vest')}
+                      />
+                      VEST
+                    </label>
+                    {delivery === 'vest' && (
+                      <label>
+                        vest duration (days)
+                        <input
+                          type="number"
+                          min={1}
+                          value={vestDays}
+                          onChange={(e) => setVestDays(Number(e.target.value))}
+                        />
+                      </label>
+                    )}
+                  </fieldset>
+                </div>
               </details>
 
               <div className="pipeline">

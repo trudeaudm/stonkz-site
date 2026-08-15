@@ -1,9 +1,6 @@
 import { getAddress, type Address } from 'viem'
 import type { IndexedListing } from '../indexer/types'
-import {
-  formatDeltaPct,
-  formatUsdSpot,
-} from '../prices/spotMath'
+import { formatUsdSpot } from '../prices/spotMath'
 import { useMainPoolSpot } from '../prices/useMainPoolSpot'
 import { Stamp } from '../shell/Stamp'
 import { StaticWin } from '../shell/StaticWin'
@@ -18,6 +15,15 @@ function tierLabel(startMcap: string): string {
     /* unreadable */
   }
   return 'custom'
+}
+
+function factsLine(listing: IndexedListing): string {
+  const tier = tierLabel(listing.startMcap)
+  const lock = listing.liquidityLocked ? 'lock forever' : 'lock unlockable'
+  const side = listing.createSidePool
+    ? `side ${listing.sidePoolBps}bps`
+    : 'side none'
+  return `tier ${tier} · ${lock} · ${side}`
 }
 
 export function TokenCard({
@@ -54,14 +60,7 @@ export function TokenCard({
 
   const sym = listing.symbol
   const initial = sym.slice(0, 1).toUpperCase() || '?'
-  const stampUp = spot ? spot.deltaPct >= 0 : listing.liquidityLocked
-  const stampLabel = spot
-    ? spot.deltaPct >= 0
-      ? 'STONKZ'
-      : 'NOT STONKZ'
-    : listing.liquidityLocked
-      ? 'locked forever'
-      : 'unlockable'
+  const tier = tierLabel(listing.startMcap)
 
   return (
     <StaticWin
@@ -73,49 +72,29 @@ export function TokenCard({
         <div className="grow">
           <div className="tk">
             ${sym}{' '}
-            <Stamp variant={stampUp ? 'stonkz' : 'not'}>{stampLabel}</Stamp>
+            {spot ? (
+              <Stamp variant={spot.deltaPct >= 0 ? 'stonkz' : 'not'}>
+                {spot.deltaPct >= 0 ? 'STONKZ' : 'NOT STONKZ'}
+              </Stamp>
+            ) : null}{' '}
+            <Stamp variant="insta">⚡ INSTANT</Stamp>
           </div>
-          <div className="nm">{listing.name}</div>
+          <div className="nm">{factsLine(listing)}</div>
         </div>
         {spot && (
           <div>
             <div className="px">{formatUsdSpot(spot.usdPerToken)}</div>
-            <div
-              className={`px ${spot.deltaPct >= 0 ? 'up' : 'down'}`}
-              style={{ fontSize: 11 }}
-            >
-              {formatDeltaPct(spot.deltaPct)}
-            </div>
           </div>
         )}
       </div>
-      <div className="drs">
-        <div className="dr">
-          <span>tier</span>
-          <b>{tierLabel(listing.startMcap)}</b>
-        </div>
-        <div className="dr">
-          <span>lock</span>
-          <b>{listing.liquidityLocked ? 'forever' : 'unlockable'}</b>
-        </div>
-        <div className="dr">
-          <span>side</span>
-          <b>
-            {listing.createSidePool
-              ? listing.sidePoolDeployed
-                ? `${listing.sidePoolBps}bps live`
-                : `${listing.sidePoolBps}bps pending`
-              : 'none'}
-          </b>
-        </div>
-        <div className="dr">
-          <span>block</span>
-          <b>{listing.blockNumber}</b>
-        </div>
+      <div className="mono" style={{ fontSize: 11, marginTop: 8 }}>
+        {spot ? formatUsdSpot(spot.usdPerToken) : 'spot —'} · {tier} · block{' '}
+        {listing.blockNumber}
       </div>
       <button
         type="button"
         className="btn95"
+        style={{ marginTop: 10 }}
         onClick={() => onOpen(getAddress(listing.listing))}
       >
         open
@@ -151,14 +130,14 @@ export function MarketGrid({
   return (
     <section className="market-section">
       {!filterCreator && (
-        <div className="caption section-caption">— ON THE MARKET —</div>
+        <div className="caption section-caption">— LISTED —</div>
       )}
       <div className="grid">
         {rows.map((L) => (
           <TokenCard key={L.listing} listing={L} onOpen={onOpen} />
         ))}
         {showEmpty && (
-          <StaticWin title="the_market.exe" className="token-card empty-card">
+          <StaticWin title="listed.exe" className="token-card empty-card">
             <p>
               {emptyCopy ??
                 'no launches yet. the gate is closed — soft launch.'}

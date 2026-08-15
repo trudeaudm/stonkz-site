@@ -5,10 +5,10 @@ import { TokenWindow } from './express/ListingDetail'
 import { ChainGuard } from './gate/ChainGuard'
 import { GateScreen } from './gate/GateScreen'
 import { ActivityLogDock } from './market/ActivityLogDock'
-import { GenesisSlot } from './market/GenesisSlot'
 import { HeroHeadline } from './market/HeroHeadline'
 import { MarketGrid } from './market/MarketGrid'
 import { MarketHeader } from './market/MarketHeader'
+import { SonarQuiet } from './market/SonarQuiet'
 import { TickerTape } from './market/TickerTape'
 import { AccountWindow } from './shell/AccountWindow'
 import { DeskShelf } from './shell/DeskShelf'
@@ -24,17 +24,32 @@ import {
 
 type Route =
   | { name: 'home' }
-  | { name: 'launch' }
+  | { name: 'make' }
   | { name: 'me' }
   | { name: 'detail'; listing: Address }
 
 function parseHash(): Route {
   const raw = window.location.hash.replace(/^#\/?/, '')
   const parts = raw.split('/').filter(Boolean)
-  if (parts[0] === 'launch') return { name: 'launch' }
-  if (parts[0] === 'me') return { name: 'me' }
-  if (parts[0] === 'listings') return { name: 'home' }
+
+  // Legacy redirects → canonical hashes
+  if (parts[0] === 'launch') {
+    window.history.replaceState(null, '', '#/make')
+    return { name: 'make' }
+  }
+  if (parts[0] === 'listings') {
+    window.history.replaceState(null, '', '#/')
+    return { name: 'home' }
+  }
   if (parts[0] === 'l' && parts[1] && isAddress(parts[1])) {
+    const listing = getAddress(parts[1])
+    window.history.replaceState(null, '', `#/tok/${listing}`)
+    return { name: 'detail', listing }
+  }
+
+  if (parts[0] === 'make') return { name: 'make' }
+  if (parts[0] === 'me') return { name: 'me' }
+  if (parts[0] === 'tok' && parts[1] && isAddress(parts[1])) {
     return { name: 'detail', listing: getAddress(parts[1]) }
   }
   return { name: 'home' }
@@ -42,9 +57,9 @@ function parseHash(): Route {
 
 function navigate(route: Route) {
   if (route.name === 'home') window.location.hash = '#/'
-  else if (route.name === 'launch') window.location.hash = '#/launch'
+  else if (route.name === 'make') window.location.hash = '#/make'
   else if (route.name === 'me') window.location.hash = '#/me'
-  else window.location.hash = `#/l/${route.listing}`
+  else window.location.hash = `#/tok/${route.listing}`
 }
 
 function MarketPage() {
@@ -56,13 +71,13 @@ function MarketPage() {
 
   const syncFromRoute = useCallback(
     (r: Route) => {
-      if (r.name !== 'launch') {
+      if (r.name !== 'make') {
         close('make_coin')
         close('precheck')
       }
       if (r.name !== 'me') close('my_stuff')
 
-      if (r.name === 'launch') {
+      if (r.name === 'make') {
         open('make_coin', 'make_coin.exe')
         open('precheck', 'precheck.exe')
         setTokenListing((prev) => {
@@ -104,8 +119,8 @@ function MarketPage() {
   }, [syncFromRoute])
 
   useEffect(() => {
-    if (route.name === 'launch' && !isOpen('make_coin') && !isOpen('precheck') && !isOpen('certificate')) {
-      if (window.location.hash.startsWith('#/launch')) {
+    if (route.name === 'make' && !isOpen('make_coin') && !isOpen('precheck') && !isOpen('certificate')) {
+      if (window.location.hash.startsWith('#/make')) {
         navigate({ name: 'home' })
         setRoute({ name: 'home' })
       }
@@ -118,7 +133,7 @@ function MarketPage() {
     }
     if (route.name === 'detail' && tokenListing) {
       const id = `token:${tokenListing}` as WinId
-      if (!isOpen(id) && window.location.hash.startsWith('#/l/')) {
+      if (!isOpen(id) && window.location.hash.startsWith('#/tok/')) {
         navigate({ name: 'home' })
         setRoute({ name: 'home' })
         setTokenListing(null)
@@ -126,11 +141,11 @@ function MarketPage() {
     }
   }, [windows, route, isOpen, tokenListing])
 
-  const goLaunch = useCallback(() => {
+  const goMake = useCallback(() => {
     open('make_coin', 'make_coin.exe')
     open('precheck', 'precheck.exe')
-    navigate({ name: 'launch' })
-    setRoute({ name: 'launch' })
+    navigate({ name: 'make' })
+    setRoute({ name: 'make' })
   }, [open])
 
   const goMe = useCallback(() => {
@@ -154,7 +169,7 @@ function MarketPage() {
       <Scenery />
       <div className="wrap">
         <MarketHeader
-          onMakeCoin={goLaunch}
+          onMakeCoin={goMake}
           onMyStuff={goMe}
           onAccount={() => {
             if (isOpen('account')) close('account')
@@ -164,16 +179,19 @@ function MarketPage() {
         <TickerTape />
         <HeroHeadline />
         <ActivityLogDock />
-        <GenesisSlot />
         <DeskShelf />
-        <MarketGrid onOpen={openToken} />
-        <footer className="site-foot">
-          STONKZ · stonkz.green · gated build · every number on this page is
-          read from chain
+        <div className="grid2">
+          <MarketGrid onOpen={openToken} />
+          <SonarQuiet />
+        </div>
+        <footer>
+          S T O N K Z · stonkz.green · gated build · every number on this page
+          is read from chain
           <br />
           not affiliated with robinhood markets · this is not financal advice
           becuase we cannot spell financal · never trade money you cannot lose,
           fren
+          <span className="foot-sticker tagline">number go up responsibly</span>
         </footer>
       </div>
 

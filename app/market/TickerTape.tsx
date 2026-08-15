@@ -6,7 +6,6 @@ import type { IndexedListing } from '../indexer/types'
 import {
   ethPerTokenFromSlot0,
   ethPerTokenFromStartPriceWad,
-  formatDeltaPct,
   formatUsdSpot,
   poolIdFromKey,
 } from '../prices/spotMath'
@@ -124,8 +123,9 @@ export function TickerTape() {
         return { text: `unreadable · block ${L.blockNumber}`, up: true as const }
       }
       if (s) {
+        const verdict = s.deltaPct >= 0 ? '☝ STONKZ' : '👇 NOT STONKZ'
         return {
-          text: `$${L.symbol} ${formatUsdSpot(s.usd)} ${formatDeltaPct(s.deltaPct)}`,
+          text: `$${L.symbol} ${formatUsdSpot(s.usd)} ${verdict}`,
           up: s.deltaPct >= 0,
         }
       }

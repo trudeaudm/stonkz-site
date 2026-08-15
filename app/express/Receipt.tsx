@@ -86,7 +86,7 @@ export function Receipt({
         <button type="button" className="btn95" onClick={onReset}>
           file another
         </button>
-        <a className="btn95" href={`#/l/${data.listing}`}>
+        <a className="btn95" href={`#/tok/${data.listing}`}>
           open detail
         </a>
       </div>

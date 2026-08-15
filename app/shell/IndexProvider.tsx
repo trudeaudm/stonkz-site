@@ -28,6 +28,12 @@ type IndexValue = {
 
 const Ctx = createContext<IndexValue | null>(null)
 
+const WELCOME_LINE: LogLine = {
+  id: 'welcome',
+  text: 'welcom to stonkz. the line await you.',
+  at: 0,
+}
+
 function tierLabel(startMcap: string): string {
   try {
     const v = BigInt(startMcap)
@@ -39,13 +45,18 @@ function tierLabel(startMcap: string): string {
   return 'custom tier'
 }
 
+function withWelcome(lines: LogLine[]): LogLine[] {
+  if (lines.some((l) => l.id === 'welcome')) return lines
+  return [WELCOME_LINE, ...lines]
+}
+
 export function IndexProvider({ children }: { children: ReactNode }) {
   const client = usePublicClient()
   const factory = env.addrExpressFactory
   const [listings, setListings] = useState<IndexedListing[]>([])
   const [progress, setProgress] = useState<ScanProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [logLines, setLogLines] = useState<LogLine[]>([])
+  const [logLines, setLogLines] = useState<LogLine[]>([WELCOME_LINE])
 
   useEffect(() => {
     if (!factory || !client) return
@@ -54,13 +65,15 @@ export function IndexProvider({ children }: { children: ReactNode }) {
       setListings(cached.listings)
       if (cached.listings.length > 0) {
         setLogLines(
-          cached.listings.map((L) => ({
-            id: `${L.txHash}:${L.logIndex}`,
-            text: L.hydrateError
-              ? `ExpressListed ${L.listing.slice(0, 10)}… · indexed but unreadable — ${L.hydrateError}`
-              : `$${L.symbol} listed · ${tierLabel(L.startMcap)} tier · block ${L.blockNumber}`,
-            at: L.hydratedAt,
-          })),
+          withWelcome(
+            cached.listings.map((L) => ({
+              id: `${L.txHash}:${L.logIndex}`,
+              text: L.hydrateError
+                ? `ExpressListed ${L.listing.slice(0, 10)}… · indexed but unreadable — ${L.hydrateError}`
+                : `$${L.symbol} listed · ${tierLabel(L.startMcap)} tier · block ${L.blockNumber}`,
+              at: L.hydratedAt,
+            })),
+          ),
         )
       }
     }
