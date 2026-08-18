@@ -1,7 +1,9 @@
 import type { Address, Hex, Log, PublicClient } from 'viem'
-import { toEventSelector } from 'viem'
+import { toEventSelector, zeroAddress } from 'viem'
 import { directListingAbi } from '../abi/directListing'
+import { expressFactoryAbi } from '../abi/expressFactory'
 import { POOL_SWAP_TOPIC0, poolManagerSwapAbi } from '../abi/poolManager'
+import { v4AdapterAbi } from '../abi/v4Adapter'
 import { env } from '../config/env'
 import { poolIdFromKey } from '../prices/spotMath'
 import { loadEnvelope, saveEnvelope } from './storage'
@@ -293,6 +295,51 @@ function persistListingMeta(
 }
 
 /**
+ * Resolve the Uniswap v4 PoolManager that emits Swap logs.
+ *
+ * Prefer VITE_ADDR_POOL_MANAGER when baked. Otherwise:
+ *   factory.poolManager() → V4Adapter, then adapter.manager() → PoolManager.
+ * (factory.poolManager is the adapter, not the log address — verified live.)
+ * Falls back to env.addrV4Adapter.manager() when factory hop fails.
+ */
+export async function resolvePoolManager(
+  client: PublicClient,
+  factory: Address,
+): Promise<Address> {
+  if (env.addrPoolManager) return env.addrPoolManager
+
+  let adapter: Address | undefined
+  try {
+    const fromFactory = await client.readContract({
+      address: factory,
+      abi: expressFactoryAbi,
+      functionName: 'poolManager',
+    })
+    if (fromFactory && fromFactory.toLowerCase() !== zeroAddress) {
+      adapter = fromFactory
+    }
+  } catch {
+    /* try env adapter */
+  }
+  if (!adapter) adapter = env.addrV4Adapter
+  if (!adapter) {
+    throw new Error(
+      'cannot resolve PoolManager — set VITE_ADDR_POOL_MANAGER or VITE_ADDR_V4_ADAPTER / Express factory',
+    )
+  }
+
+  const pm = await client.readContract({
+    address: adapter,
+    abi: v4AdapterAbi,
+    functionName: 'manager',
+  })
+  if (!pm || pm.toLowerCase() === zeroAddress) {
+    throw new Error(`adapter.manager() returned empty — adapter=${adapter}`)
+  }
+  return pm
+}
+
+/**
  * Scan PoolManager Swap logs for each listing's main (+ side) pool.
  * Cursor advances ONLY after a chunk is decoded AND persisted (e2848d4 lesson).
  */
@@ -302,10 +349,7 @@ export async function scanListingSwaps(
   controls?: SwapScanControls,
 ): Promise<{ envelope: IndexEnvelope; progress: ScanProgress }> {
   assertSwapTopic0()
-  const pm = env.addrPoolManager
-  if (!pm) {
-    throw new Error('VITE_ADDR_POOL_MANAGER is not set — cannot index swaps')
-  }
+  const pm = await resolvePoolManager(client, factory)
 
   let envelope = loadEnvelope(env.chainId, factory)
   if (!envelope) {

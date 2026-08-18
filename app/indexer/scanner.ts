@@ -211,6 +211,7 @@ export async function scanExpressListings(
     return b.logIndex - a.logIndex
   })
 
+  // Preserve swap stores — listing scan must not wipe indexed volume/charts.
   const envelope: IndexEnvelope = {
     v: 2,
     chainId,
@@ -219,6 +220,8 @@ export async function scanExpressListings(
     fromBlock: fromBlock.toString(),
     listings,
     updatedAt: Date.now(),
+    swaps: existing.swaps,
+    listingSwapMeta: existing.listingSwapMeta,
   }
   saveEnvelope(envelope)
 

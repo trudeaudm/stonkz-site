@@ -150,8 +150,9 @@ export function IndexProvider({ children }: { children: ReactNode }) {
           ])
         }
 
-        // Swap indexer — after listings; cursor discipline inside scanListingSwaps.
-        if (env.addrPoolManager && envl.listings.some((L) => !L.hydrateError)) {
+        // Swap indexer — after listings; resolves PoolManager on-chain when
+        // VITE_ADDR_POOL_MANAGER was not baked into the deploy bundle.
+        if (envl.listings.some((L) => !L.hydrateError)) {
           try {
             const { envelope: withSwaps, progress: sp } = await scanListingSwaps(
               client,

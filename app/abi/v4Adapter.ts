@@ -15,6 +15,17 @@ export const v4AdapterAbi = [
       { name: 'lpFee', type: 'uint24' },
     ],
   },
+  /**
+   * Underlying Uniswap v4 PoolManager (Swap log address).
+   * Distinct from factory.poolManager(), which returns this adapter.
+   */
+  {
+    type: 'function',
+    name: 'manager',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
   {
     type: 'function',
     name: 'authorized',
