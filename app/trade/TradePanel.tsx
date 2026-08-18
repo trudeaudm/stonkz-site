@@ -3,7 +3,6 @@ import {
   formatEther,
   parseEther,
   zeroAddress,
-  type Address,
 } from 'viem'
 import {
   useAccount,
@@ -36,6 +35,7 @@ import {
 } from './quote'
 import { resolveRoute } from './router'
 import { universalRouterAbi } from '../abi/universalRouter'
+import { MAIN_POOL_SELLS_ENABLED } from './flags'
 
 const SLIPPAGE_KEY = 'stonkz:trade:slippageBps'
 const DEFAULT_SLIPPAGE_BPS = 100n // 1%
@@ -116,6 +116,7 @@ export function TradePanel({
   const ur = env.addrUniversalRouter
   const permit2 = env.addrPermit2
   const wrongChain = isConnected && chainId !== env.chainId
+  const sellsBlocked = side === 'sell' && !MAIN_POOL_SELLS_ENABLED
 
   const ethBal = useBalance({ address, query: { enabled: Boolean(address) } })
   const tokenBal = useReadContract({
@@ -153,7 +154,13 @@ export function TradePanel({
 
   // Re-read allowances on mount / side / amount / address (sell flow survives reload).
   useEffect(() => {
-    if (!client || !address || side !== 'sell' || amountIn <= 0n) {
+    if (
+      !MAIN_POOL_SELLS_ENABLED ||
+      !client ||
+      !address ||
+      side !== 'sell' ||
+      amountIn <= 0n
+    ) {
       setAllow(null)
       setSellStep('idle')
       return
@@ -177,6 +184,15 @@ export function TradePanel({
   }, [client, address, side, amountIn, listing.token])
 
   const runQuote = useCallback(async () => {
+    if (
+      !MAIN_POOL_SELLS_ENABLED &&
+      route.kind === 'supported' &&
+      !route.valueIsInput
+    ) {
+      setQuote(null)
+      setQuoteErr(null)
+      return
+    }
     if (!client || !address || route.kind !== 'supported' || amountIn <= 0n) {
       setQuote(null)
       setQuoteErr(null)
@@ -221,21 +237,22 @@ export function TradePanel({
   ])
 
   // Debounced re-quote on input + every 10s while panel open.
+  // Skip entirely for blocked main-pool sells — those simulates revert.
   useEffect(() => {
-    if (amountIn <= 0n || route.kind !== 'supported') {
+    if (sellsBlocked || amountIn <= 0n || route.kind !== 'supported') {
       setQuote(null)
       setQuoteErr(null)
       return
     }
     const t = window.setTimeout(() => void runQuote(), DEBOUNCE_MS)
     return () => window.clearTimeout(t)
-  }, [amountIn, side, slippageBps, runQuote, route.kind])
+  }, [amountIn, side, slippageBps, runQuote, route.kind, sellsBlocked])
 
   useEffect(() => {
-    if (amountIn <= 0n || route.kind !== 'supported') return
+    if (sellsBlocked || amountIn <= 0n || route.kind !== 'supported') return
     const id = window.setInterval(() => void runQuote(), QUOTE_INTERVAL_MS)
     return () => window.clearInterval(id)
-  }, [amountIn, side, runQuote, route.kind])
+  }, [amountIn, side, runQuote, route.kind, sellsBlocked])
 
   const balance =
     side === 'buy'
@@ -261,6 +278,7 @@ export function TradePanel({
   }
 
   const disabledReason = useMemo(() => {
+    if (sellsBlocked) return 'main-pool sells paused — hook fee bug'
     if (!ur || !permit2) return 'set Universal Router + Permit2 in env (Render) then rebuild'
     if (!isConnected) return 'connect wallet'
     if (wrongChain) return `wrong chain — switch to ${env.chainId}`
@@ -273,6 +291,7 @@ export function TradePanel({
     if (busy) return 'transaction pending'
     return null
   }, [
+    sellsBlocked,
     ur,
     permit2,
     isConnected,
@@ -295,6 +314,7 @@ export function TradePanel({
   }, [side, sellStep])
 
   const onSubmit = async () => {
+    if (sellsBlocked) return
     if (disabledReason || !client || !address || !quote || !ur || !permit2) return
     setBusy(true)
     try {
@@ -387,6 +407,7 @@ export function TradePanel({
             setAmountStr('')
             setQuote(null)
             setQuoteErr(null)
+            setStale(false)
           }}
         >
           sell
@@ -403,14 +424,32 @@ export function TradePanel({
             onChange={(e) => setAmountStr(e.target.value)}
             placeholder="0.0"
             inputMode="decimal"
+            disabled={sellsBlocked}
             style={{ flex: 1 }}
           />
-          <button type="button" className="btn95" onClick={setMax}>
+          <button
+            type="button"
+            className="btn95"
+            onClick={setMax}
+            disabled={sellsBlocked}
+          >
             MAX
           </button>
         </div>
       </label>
 
+      {sellsBlocked && (
+        <p className="hint" style={{ marginTop: 8 }}>
+          main-pool sells are blocked by a fee-calculation bug in the pool hook
+          — the fee is charged on the wrong side for sells. this is a contract
+          issue being fixed, not a lock on your tokens. the tokens are yours
+          and transferable. the side pool (USDG) has no hook; you can sell into
+          it on the dex meanwhile (link below).
+        </p>
+      )}
+
+      {!sellsBlocked && (
+        <>
       <div className="dr">
         <span>you receive</span>
         <b>
@@ -505,8 +544,10 @@ export function TradePanel({
         this swap moves the price. the hook takes {Number(HOOK_FEE_BPS) / 100}% of
         the input. what you receive can differ from the quote.
       </p>
+        </>
+      )}
 
-      {side === 'sell' && allow && (
+      {MAIN_POOL_SELLS_ENABLED && side === 'sell' && allow && (
         <p className="hint">
           {allow.needsErc20Approve || allow.needsPermit2Approve
             ? `approvals needed: ${[
