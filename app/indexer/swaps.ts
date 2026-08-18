@@ -493,6 +493,23 @@ export function priceSeriesForPool(
   return out
 }
 
+/** One USD point per indexed swap (no carry-forward) — sparse charts. */
+export function tradePricePoints(
+  store: PoolSwapStore,
+  usdFromSqrt: (sqrt: bigint) => number,
+): number[] {
+  const out: number[] = []
+  for (const b of store.buckets ?? []) {
+    const usd = usdFromSqrt(BigInt(b.sqrtPriceX96))
+    if (usd > 0) out.push(usd)
+  }
+  for (const ev of store.events) {
+    const usd = usdFromSqrt(BigInt(ev.sqrtPriceX96))
+    if (usd > 0) out.push(usd)
+  }
+  return out
+}
+
 export function activeStoreForListing(
   envelope: IndexEnvelope,
   listing: Address,
@@ -504,4 +521,26 @@ export function activeStoreForListing(
       ? meta.sidePoolId
       : meta.mainPoolId
   return envelope.swaps?.[id.toLowerCase()] ?? null
+}
+
+/**
+ * Gross pair-side raw volume for a store. Prefer persisted volumePairRaw;
+ * if zero despite events (stale envelope), re-sum from events.
+ */
+export function effectiveVolumePairRaw(
+  store: PoolSwapStore,
+  token: Address,
+): string {
+  if (BigInt(store.volumePairRaw) > 0n) return store.volumePairRaw
+  if (store.events.length === 0) return store.volumePairRaw
+  let vol = 0n
+  const tok0 = store.key.currency0.toLowerCase() === token.toLowerCase()
+  for (const ev of store.events) {
+    const a0 = BigInt(ev.amount0)
+    const a1 = BigInt(ev.amount1)
+    const abs0 = a0 < 0n ? -a0 : a0
+    const abs1 = a1 < 0n ? -a1 : a1
+    vol += tok0 ? abs1 : abs0
+  }
+  return vol.toString()
 }

@@ -9,9 +9,9 @@ import { Stamp } from '../shell/Stamp'
 import { Win95Window } from '../shell/Window'
 import { useWindowManager } from '../shell/windowManager'
 import { hydrateListingByAddress, refreshMutable } from '../indexer/hydrate'
+import { effectiveVolumePairRaw } from '../indexer/swaps'
 import { loadEnvelope, saveEnvelope } from '../indexer/storage'
 import type { IndexedListing } from '../indexer/types'
-import { useIndex } from '../shell/IndexProvider'
 import {
   formatEthUsdRate,
   formatStampedEthUsdLine,
@@ -22,10 +22,13 @@ import { useCostBasis } from '../prices/useCostBasis'
 import {
   formatDeltaPct,
   formatMcapUsd,
+  formatPairVolumeLabel,
+  formatTimeAgo,
   formatUsdSpot,
-  pairVolumeUsd,
 } from '../prices/spotMath'
 import {
+  lastSwapEvent,
+  swapDirection,
   useActiveSwapStore,
   useListingSpot,
   usePriceSeries,
@@ -69,15 +72,6 @@ function reserveBpsOrRaw(record: IndexedListing): string {
   return `${reserve.toString()} raw`
 }
 
-function relativeBlocks(last: string, head: bigint | undefined): string {
-  if (!head || last === '0') return '—'
-  const ago = head - BigInt(last)
-  if (ago <= 0n) return 'just now'
-  if (ago < 100n) return `${ago.toString()} blocks ago`
-  if (ago < 10_000n) return `${ago.toString()} blocks ago`
-  return `block ${last}`
-}
-
 export function TokenWindow({
   listing,
   onClose,
@@ -88,13 +82,13 @@ export function TokenWindow({
   const client = usePublicClient()
   const { address } = useAccount()
   const { open } = useWindowManager()
-  const { progress } = useIndex()
   const factory = env.addrExpressFactory
   const [record, setRecord] = useState<IndexedListing | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [ethUsdWad, setEthUsdWad] = useState<bigint | null>(null)
   const [ethUsdResolved, setEthUsdResolved] = useState(false)
+  const [lastTradeAgo, setLastTradeAgo] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -230,6 +224,34 @@ export function TokenWindow({
   const spot = useListingSpot(record, Boolean(record) && !loading && !err)
   const series = usePriceSeries(record, spot?.liveEthUsd ?? null)
   const swapStore = useActiveSwapStore(record)
+  const lastEv = lastSwapEvent(swapStore)
+
+  useEffect(() => {
+    if (!client || !lastEv) {
+      setLastTradeAgo(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const block = await client.getBlock({
+          blockNumber: BigInt(lastEv.blockNumber),
+        })
+        if (!cancelled) {
+          setLastTradeAgo(formatTimeAgo(Number(block.timestamp)))
+        }
+      } catch (e) {
+        console.error(
+          '[token] last-trade timestamp',
+          e instanceof Error ? e.message : e,
+        )
+        if (!cancelled) setLastTradeAgo(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [client, lastEv])
 
   const { data: holderBal } = useReadContract({
     address: record?.token,
@@ -278,22 +300,34 @@ export function TokenWindow({
 
   const mode = reserveModeLabel(record)
   const v2Usd = isV2UsdStamp(ethUsdWad)
-  const dexUrl = dexscreenerTokenUrl(record.token)
+  const sideDexUrl = dexscreenerTokenUrl(record.token)
   const sideLabel = !record.createSidePool
     ? 'off'
     : record.sidePoolDeployed
       ? `${record.sidePoolBps} bps · deployed`
       : `${record.sidePoolBps} bps · pending`
 
-  const volUsd =
+  const volPairRaw =
     swapStore != null
-      ? pairVolumeUsd(
-          swapStore.volumePairRaw,
+      ? effectiveVolumePairRaw(swapStore, record.token)
+      : '0'
+  const volumeLabel =
+    swapStore != null && swapStore.swapCount > 0
+      ? formatPairVolumeLabel(
+          volPairRaw,
           swapStore.kind,
           spot?.liveEthUsd ?? null,
         )
       : null
   const swapCount = swapStore?.swapCount ?? 0
+  const lastDir =
+    swapStore && lastEv
+      ? swapDirection(swapStore, record.token, lastEv)
+      : null
+  const lastTradeLabel =
+    swapStore && swapStore.lastSwapBlock !== '0'
+      ? `block ${swapStore.lastSwapBlock}${lastTradeAgo ? ` · ${lastTradeAgo}` : ''}${lastDir ? ` · ${lastDir}` : ''}`
+      : null
   const flexDelta =
     basis != null && spot
       ? ((spot.usdPerToken - basis.avgCostUsd) / basis.avgCostUsd) * 100
@@ -375,7 +409,7 @@ export function TokenWindow({
         <p className="hint">not yet indexed — reading directly from chain</p>
       )}
 
-      {swapCount === 0 || series.length === 0 ? (
+      {swapCount === 0 ? (
         <div
           className="zig"
           style={{
@@ -394,10 +428,21 @@ export function TokenWindow({
       ) : (
         <div style={{ marginTop: 8 }}>
           <ZigChart
-            series={series}
+            series={
+              series.length > 0
+                ? series
+                : spot && spot.usdPerToken > 0
+                  ? [spot.usdPerToken]
+                  : []
+            }
             startUsd={spot?.startUsdPerToken ?? 0}
             height={140}
           />
+          {swapCount > 0 && swapCount < 3 && (
+            <p className="hint" style={{ marginTop: 6 }}>
+              one trade so far. line needs more frens.
+            </p>
+          )}
         </div>
       )}
 
@@ -430,19 +475,11 @@ export function TokenWindow({
           </div>
           <div className="dr">
             <span>volume</span>
-            <b>
-              {volUsd != null
-                ? `${formatUsdSpot(volUsd)} gross (${swapStore?.kind === 'side' ? 'USDG' : 'ETH'} side)`
-                : '—'}
-            </b>
+            <b>{volumeLabel ?? '—'}</b>
           </div>
           <div className="dr">
             <span>last trade</span>
-            <b>
-              {swapStore && swapStore.lastSwapBlock !== '0'
-                ? `block ${swapStore.lastSwapBlock} · ${relativeBlocks(swapStore.lastSwapBlock, progress?.head)}`
-                : '—'}
-            </b>
+            <b>{lastTradeLabel ?? '—'}</b>
           </div>
           <div className="dr">
             <span>stamped $rate</span>
@@ -496,7 +533,9 @@ export function TokenWindow({
         <div className="title">💰 do trade</div>
         <div className="body95">
           <p className="nm" style={{ margin: '0 0 8px' }}>
-            trading happens on the dex for now. soon(tm).
+            the main pool is a uniswap v4 pool with a hook. public routers do
+            not route it yet — no aggregator coverage despite live depth. the
+            side pool (USDG) is what aggregators see.
           </p>
           <div className="btn-row">
             <a
@@ -515,14 +554,14 @@ export function TokenWindow({
             >
               listing on explorer
             </a>
-            {dexUrl && (
+            {sideDexUrl && record.createSidePool && (
               <a
                 className="btn95"
-                href={dexUrl}
+                href={sideDexUrl}
                 target="_blank"
                 rel="noreferrer"
               >
-                dexscreener
+                side pool · dexscreener
               </a>
             )}
           </div>

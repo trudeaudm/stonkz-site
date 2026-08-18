@@ -19,7 +19,7 @@ import { env } from '../config/env'
 
 /** Same hard-block copy as step 15 — stale env / orphaned factory. */
 export const FACTORY_V2_FAIL_COPY =
-  'this build points at a factory without v2 pricing — DO NOT FILE. env or deploy is stale.'
+  'this build points at a factory that is not the current generation — DO NOT FILE. env or deploy is stale.'
 
 export function shortFactory(addr: Address): string {
   return `0x${addr.slice(2, 6)}…${addr.slice(-4)}`

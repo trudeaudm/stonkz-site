@@ -86,7 +86,7 @@ export function TokenCard({
           </div>
           <div className="nm">{factsLine(listing)}</div>
         </div>
-        {series.length >= 2 ? (
+        {series.length >= 1 ? (
           <Sparkline series={series} />
         ) : (
           <div

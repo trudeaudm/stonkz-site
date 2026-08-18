@@ -20,13 +20,14 @@ export function ZigChart({
   const pts = series.map((v, i) => {
     const x = (i / Math.max(1, series.length - 1)) * (w - 2 * p) + p
     const y = height - p - ((v - mn) / span) * (height - 2 * p)
-    return `${x.toFixed(1)},${y.toFixed(1)}`
+    return { x, y }
   })
-  const last = pts[pts.length - 1]!.split(',').map(Number) as [number, number]
+  const last = pts[pts.length - 1]!
   const floorY =
     startUsd > 0
       ? height - p - ((startUsd - mn) / span) * (height - 2 * p)
       : null
+  const poly = pts.map((pt) => `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`).join(' ')
 
   return (
     <svg
@@ -47,22 +48,35 @@ export function ZigChart({
           strokeDasharray="6 4"
         />
       )}
-      <polyline
-        points={pts.join(' ')}
-        stroke={GREEN}
-        strokeWidth={7}
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d={`M${last[0]! - 16} ${last[1]! - 2} L${last[0]! + 2} ${last[1]} L${last[0]! - 3} ${last[1]! + 15}`}
-        stroke={GREEN}
-        strokeWidth={7}
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      {series.length === 1 ? (
+        <circle
+          cx={last.x}
+          cy={last.y}
+          r={8}
+          fill={GREEN}
+          stroke="#000"
+          strokeWidth={2}
+        />
+      ) : (
+        <>
+          <polyline
+            points={poly}
+            stroke={GREEN}
+            strokeWidth={7}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d={`M${last.x - 16} ${last.y - 2} L${last.x + 2} ${last.y} L${last.x - 3} ${last.y + 15}`}
+            stroke={GREEN}
+            strokeWidth={7}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </>
+      )}
     </svg>
   )
 }
@@ -71,8 +85,21 @@ export function Sparkline({ series }: { series: number[] }) {
   const w = 70
   const h = 26
   const s = series.slice(-24)
-  if (s.length < 2) {
+  if (s.length === 0) {
     return <div className="spark" aria-hidden />
+  }
+  if (s.length === 1) {
+    const y = h / 2
+    return (
+      <svg
+        className="spark"
+        viewBox={`0 0 ${w} ${h}`}
+        preserveAspectRatio="none"
+        aria-hidden
+      >
+        <circle cx={w - 6} cy={y} r={3} fill={GREEN} />
+      </svg>
+    )
   }
   const mx = Math.max(...s)
   const mn = Math.min(...s)

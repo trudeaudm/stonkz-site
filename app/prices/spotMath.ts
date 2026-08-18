@@ -110,14 +110,48 @@ export function formatMcapUsd(mcap: number): string {
   return `$${mcap.toPrecision(3)}`
 }
 
-/** Gross pair volume → USD label. Side = USDG raw/1e6; main = ETH * liveRate. */
+/** Gross pair volume → USD. Side = USDG raw/1e6; main = ETH * liveRate. */
 export function pairVolumeUsd(
   volumePairRaw: string,
   kind: 'main' | 'side',
   liveEthUsd: number | null,
 ): number | null {
   const raw = BigInt(volumePairRaw)
+  if (raw === 0n) return kind === 'side' ? 0 : liveEthUsd != null ? 0 : null
   if (kind === 'side') return Number(raw) / 1e6
   if (liveEthUsd == null || liveEthUsd <= 0) return null
   return (Number(raw) / 1e18) * liveEthUsd
+}
+
+/** Human pair-side volume label for recon (ETH+USD or USDG). */
+export function formatPairVolumeLabel(
+  volumePairRaw: string,
+  kind: 'main' | 'side',
+  liveEthUsd: number | null,
+): string | null {
+  const raw = BigInt(volumePairRaw)
+  if (raw === 0n) return null
+  if (kind === 'side') {
+    const usdg = Number(raw) / 1e6
+    if (!(usdg > 0)) return null
+    return `${formatUsdSpot(usdg)} USDG`
+  }
+  const eth = Number(raw) / 1e18
+  if (!(eth > 0)) return null
+  const ethStr =
+    eth >= 0.001 ? eth.toPrecision(4) : eth.toExponential(2)
+  const usd = liveEthUsd != null && liveEthUsd > 0 ? eth * liveEthUsd : null
+  return usd != null && usd > 0
+    ? `${ethStr} ETH (${formatUsdSpot(usd)})`
+    : `${ethStr} ETH`
+}
+
+/** Relative age from unix seconds → memeworld-short ("3h ago"). */
+export function formatTimeAgo(unixSec: number, nowSec = Date.now() / 1000): string {
+  const d = Math.max(0, Math.floor(nowSec - unixSec))
+  if (d < 60) return 'just now'
+  if (d < 3600) return `${Math.floor(d / 60)}m ago`
+  if (d < 86400) return `${Math.floor(d / 3600)}h ago`
+  if (d < 86400 * 14) return `${Math.floor(d / 86400)}d ago`
+  return `${Math.floor(d / 86400)}d ago`
 }

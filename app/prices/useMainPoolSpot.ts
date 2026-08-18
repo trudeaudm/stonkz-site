@@ -6,8 +6,10 @@ import { env } from '../config/env'
 import {
   activeStoreForListing,
   priceSeriesForPool,
+  tradePricePoints,
 } from '../indexer/swaps'
-import type { IndexedListing, PoolSwapStore } from '../indexer/types'
+import { loadEnvelope } from '../indexer/storage'
+import type { IndexedListing, IndexedSwap, PoolSwapStore } from '../indexer/types'
 import { useIndex } from '../shell/IndexProvider'
 import {
   ethPerTokenFromSlot0,
@@ -186,9 +188,41 @@ export function useActiveSwapStore(
 ): PoolSwapStore | null {
   const { envelope } = useIndex()
   return useMemo(() => {
-    if (!listing || !envelope) return null
-    return activeStoreForListing(envelope, listing.listing)
+    if (!listing) return null
+    const fromCtx = envelope
+      ? activeStoreForListing(envelope, listing.listing)
+      : null
+    if (fromCtx && (fromCtx.swapCount > 0 || fromCtx.lastSwapBlock !== '0')) {
+      return fromCtx
+    }
+    // Disk may be ahead of React state mid-scan — recon rows read aggregates here.
+    const factory = env.addrExpressFactory
+    if (!factory) return fromCtx
+    const disk = loadEnvelope(env.chainId, factory)
+    if (!disk) return fromCtx
+    return activeStoreForListing(disk, listing.listing) ?? fromCtx
   }, [envelope, listing])
+}
+
+/** Last indexed swap on the active pool (for direction / block). */
+export function lastSwapEvent(store: PoolSwapStore | null): IndexedSwap | null {
+  if (!store || store.events.length === 0) return null
+  return store.events[store.events.length - 1]!
+}
+
+/**
+ * Buy/sell of the launch token.
+ * On this chain's PoolManager Swap event, a positive token-side amount
+ * coincides with Transfer of tokens to the trader (buy); negative ⇒ sell.
+ */
+export function swapDirection(
+  store: PoolSwapStore,
+  token: `0x${string}`,
+  ev: IndexedSwap,
+): 'buy' | 'sell' {
+  const tok0 = store.key.currency0.toLowerCase() === token.toLowerCase()
+  const tokenDelta = BigInt(tok0 ? ev.amount0 : ev.amount1)
+  return tokenDelta > 0n ? 'buy' : 'sell'
 }
 
 /** Active-pool price series for charts/sparks (USD). */
@@ -197,8 +231,8 @@ export function usePriceSeries(
   liveEthUsd: number | null,
 ): number[] {
   const store = useActiveSwapStore(listing)
-  const { progress } = useIndex()
-  const head = progress?.head ?? 0n
+  const { progress, swapProgress } = useIndex()
+  const head = swapProgress?.head ?? progress?.head ?? 0n
 
   return useMemo(() => {
     if (!listing || !store || store.swapCount === 0) return []
@@ -209,7 +243,25 @@ export function usePriceSeries(
       if (liveEthUsd == null || liveEthUsd <= 0) return 0
       return ethPerTokenFromSlot0(sqrt, store.key) * liveEthUsd
     }
-    return priceSeriesForPool(store, head > 0n ? head : BigInt(store.cursor), usdFromSqrt)
+    const seriesHead =
+      head > 0n
+        ? head
+        : BigInt(store.lastSwapBlock !== '0' ? store.lastSwapBlock : store.cursor)
+    // Sparse: one point per trade so a single swap renders as a dot, not a flat 120-bucket line.
+    if (store.swapCount < 3) {
+      let pts = tradePricePoints(store, usdFromSqrt)
+      if (pts.length === 0 && store.lastSqrtPriceX96 !== '0') {
+        const usd = usdFromSqrt(BigInt(store.lastSqrtPriceX96))
+        if (usd > 0) pts = [usd]
+      }
+      return pts
+    }
+    let series = priceSeriesForPool(store, seriesHead, usdFromSqrt)
+    if (series.length === 0 && store.lastSqrtPriceX96 !== '0') {
+      const usd = usdFromSqrt(BigInt(store.lastSqrtPriceX96))
+      if (usd > 0) series = [usd]
+    }
+    return series
   }, [head, listing, liveEthUsd, store])
 }
 
