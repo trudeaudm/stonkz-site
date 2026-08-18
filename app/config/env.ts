@@ -86,6 +86,10 @@ export const env = Object.freeze({
    * Prefer on-chain adapter.manager(); this is only a last-resort bake.
    */
   addrPoolManager: optionalAddress('VITE_ADDR_POOL_MANAGER'),
+  /** Universal Router — V4_SWAP execute target for in-app trades. */
+  addrUniversalRouter: optionalAddress('VITE_ADDR_UNIVERSAL_ROUTER'),
+  /** Permit2 — ERC20→UR allowance bridge for sells. */
+  addrPermit2: optionalAddress('VITE_ADDR_PERMIT2'),
   addrFeeHook: optionalAddress('VITE_ADDR_FEE_HOOK'),
   addrCtoGovernor: optionalAddress('VITE_ADDR_CTO_GOVERNOR'),
   addrFeeLockerV2: optionalAddress('VITE_ADDR_FEE_LOCKER_V2'),

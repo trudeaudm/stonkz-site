@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -31,6 +32,8 @@ type IndexValue = {
   error: string | null
   logLines: LogLine[]
   factoryMissing: boolean
+  /** Nudge swap indexer to catch up after an in-app trade. */
+  rescanSwaps: () => void
 }
 
 const Ctx = createContext<IndexValue | null>(null)
@@ -223,6 +226,36 @@ export function IndexProvider({ children }: { children: ReactNode }) {
     return () => ac.abort()
   }, [client, factory])
 
+  const rescanSwaps = useCallback(() => {
+    if (!factory || !client) return
+    void (async () => {
+      try {
+        const { envelope: withSwaps, progress: sp } = await scanListingSwaps(
+          client,
+          factory,
+        )
+        setEnvelope(withSwaps)
+        setListings(withSwaps.listings)
+        setSwapProgress(sp)
+        if (sp.status === 'done') {
+          setLogLines((prev) => [
+            ...prev.filter((l) => !l.text.startsWith('swaps ·')),
+            {
+              id: `swaps-nudge:${Date.now()}`,
+              text: sp.message,
+              at: Date.now(),
+            },
+          ])
+        }
+      } catch (err) {
+        console.error(
+          '[swaps] rescan failed:',
+          err instanceof Error ? err.message : err,
+        )
+      }
+    })()
+  }, [client, factory])
+
   const value = useMemo(
     () => ({
       listings,
@@ -232,8 +265,18 @@ export function IndexProvider({ children }: { children: ReactNode }) {
       error,
       logLines,
       factoryMissing: !factory,
+      rescanSwaps,
     }),
-    [listings, envelope, progress, swapProgress, error, logLines, factory],
+    [
+      listings,
+      envelope,
+      progress,
+      swapProgress,
+      error,
+      logLines,
+      factory,
+      rescanSwaps,
+    ],
   )
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

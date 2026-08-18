@@ -33,6 +33,7 @@ import {
   useListingSpot,
   usePriceSeries,
 } from '../prices/useMainPoolSpot'
+import { TradePanel } from '../trade/TradePanel'
 
 function short(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
@@ -531,12 +532,15 @@ export function TokenWindow({
 
       <div className="win" style={{ marginTop: 12 }}>
         <div className="title">💰 do trade</div>
-        <div className="body95">
-          <p className="nm" style={{ margin: '0 0 8px' }}>
-            the main pool is a uniswap v4 pool with a hook. public routers do
-            not route it yet — no aggregator coverage despite live depth. the
-            side pool (USDG) is what aggregators see.
-          </p>
+        <TradePanel
+          listing={record}
+          spotEthPerToken={spot?.ethPerToken ?? null}
+          liveEthUsd={spot?.liveEthUsd ?? null}
+          onTraded={() => {
+            void refresh()
+          }}
+        />
+        <div className="body95" style={{ paddingTop: 0 }}>
           <div className="btn-row">
             <a
               className="btn95"
