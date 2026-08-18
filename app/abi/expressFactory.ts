@@ -1,14 +1,15 @@
 /**
- * Minimal Express factory ABI — field order pinned to NOTES.md 0f + Express V3.
+ * Minimal Express factory ABI — field order pinned to NOTES.md 0f + Express V3/V4.
  * No address literals; consumers pass env.addrExpressFactory.
  *
- * ListingParams (verbatim StonkzDirectListing.sol @ fix/express-pricing):
+ * ListingParams (verbatim StonkzDirectListing.sol @ fix/express-mint — unchanged vs V3):
  *   startMcap, totalSupply, creatorReserveBps, deliveryMode, vestDuration,
  *   declaredUse, creator, name, symbol, createSidePool, sidePoolBps,
  *   liquidityLocked, refPriceWad, ethUsdWad
  *
- * V3: ethUsdWad is caller-supplied and band-validated (EthUsdStampDrift);
- * init-code hash is deterministic during mining.
+ * V3+: ethUsdWad is caller-supplied and band-validated (EthUsdStampDrift);
+ * init-code hash is deterministic during mining. V4 generation adds adapter
+ * access control + fillable main ask; list() signature unchanged.
  */
 const listingParamsComponents = [
   { name: 'startMcap', type: 'uint256' },
@@ -180,6 +181,17 @@ export const expressFactoryAbi = [
     inputs: [],
     outputs: [{ type: 'address' }],
   },
+  /**
+   * V4Adapter / PM — two-hop fingerprint hop (a).
+   * Source: StonkzExpressFactory.sol @ fix/express-mint (`IPoolManager public poolManager`).
+   */
+  {
+    type: 'function',
+    name: 'poolManager',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
   {
     type: 'function',
     name: 'hook',
@@ -286,6 +298,15 @@ export const expressFactoryAbi = [
       { name: 'supplied', type: 'uint256' },
       { name: 'current', type: 'uint256' },
     ],
+  },
+  // Express V4 generation — bubbled from V4Adapter / IPoolManager @ fix/express-mint
+  { type: 'error', name: 'NotAuthorized', inputs: [] },
+  { type: 'error', name: 'PoolNotInitialized', inputs: [] },
+  // Express V4 mint geometry — StonkzDirectListing.sol @ fix/express-mint
+  {
+    type: 'error',
+    name: 'MainAskEmpty',
+    inputs: [{ name: 'listed', type: 'uint256' }],
   },
   // deployed factory (disk build) — see stonkz-deployed-truth.md Part 3; absent at repo HEAD
   // selector 0x08586462

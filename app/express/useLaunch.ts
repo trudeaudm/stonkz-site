@@ -25,7 +25,7 @@ import {
 import { mineVanitySalt } from '../mining/mineVanity'
 import {
   FACTORY_V2_FAIL_COPY,
-  fingerprintExpressFactoryV3,
+  fingerprintExpressFactoryV4,
 } from './factoryFingerprint'
 
 export function listBufferWei(): bigint {
@@ -268,13 +268,14 @@ export function useLaunch() {
       let current: PipelineStep = 'idle'
       let attachedValue = 0n
       try {
-        // 0. factory fingerprint — hard-block V2/V1/unknown (V3 = ethUsdStampBandBps)
-        setStatus('0/7 factory fingerprint (v3)')
-        const bandBps = await fingerprintExpressFactoryV3(
+        // 0. factory fingerprint — hard-block V3/V2/V1/unknown
+        //    (V4 = two-hop poolManager → authorized(factory))
+        setStatus('0/7 factory fingerprint (v4)')
+        const adapter = await fingerprintExpressFactoryV4(
           publicClient,
           factory,
         )
-        if (bandBps == null) {
+        if (adapter == null) {
           throw new Error(FACTORY_V2_FAIL_COPY)
         }
 
@@ -305,7 +306,7 @@ export function useLaunch() {
           })
           p = { ...params, ethUsdWad: rateWad }
 
-          // b. listingInitCodeHash — stable under supplied ethUsdWad (V3)
+          // b. listingInitCodeHash — stable under supplied ethUsdWad (V3+)
           current = 'initCodeHash'
           setStep(current)
           setStatus('2/7 read listingInitCodeHash(p)')
@@ -324,7 +325,7 @@ export function useLaunch() {
             factory,
             deployer: address,
             initCodeHash,
-            factoryIsV3: true,
+            factoryIsV4: true,
             handlers: {
               onProgress: (pr) => {
                 setMineStats(

@@ -20,8 +20,8 @@ import { useWindowManager } from '../shell/windowManager'
 import { Receipt } from './Receipt'
 import {
   FACTORY_V2_FAIL_COPY,
-  factoryV3PassCopy,
-  fingerprintExpressFactoryV3,
+  factoryV4PassCopy,
+  fingerprintExpressFactoryV4,
 } from './factoryFingerprint'
 import {
   formatEthSig,
@@ -74,21 +74,45 @@ export function LaunchHost({
   const [vanityParityOk, setVanityParityOk] = useState<boolean | null>(null)
   const [vanityParityDetail, setVanityParityDetail] = useState<string>('')
   const [vanityParityRan, setVanityParityRan] = useState(false)
-  /** null = probing; bigint = V3 band bps; false = stale factory */
-  const [factoryBandBps, setFactoryBandBps] = useState<bigint | null | false>(
-    null,
-  )
+  /** null = probing; true = V4 pass; false = stale factory */
+  const [factoryGenOk, setFactoryGenOk] = useState<boolean | null>(null)
+  /** Drift band for confirm copy — read after fingerprint passes. */
+  const [stampBandBps, setStampBandBps] = useState<bigint | null>(null)
 
   useEffect(() => {
     if (!formOpen && !precheckOpen) return
     if (!publicClient || !factoryAddr) {
-      setFactoryBandBps(null)
+      setFactoryGenOk(null)
+      setStampBandBps(null)
       return
     }
     let cancelled = false
     void (async () => {
-      const band = await fingerprintExpressFactoryV3(publicClient, factoryAddr)
-      if (!cancelled) setFactoryBandBps(band == null ? false : band)
+      const adapter = await fingerprintExpressFactoryV4(
+        publicClient,
+        factoryAddr,
+      )
+      if (cancelled) return
+      if (adapter == null) {
+        setFactoryGenOk(false)
+        setStampBandBps(null)
+        return
+      }
+      setFactoryGenOk(true)
+      try {
+        const band = await publicClient.readContract({
+          address: factoryAddr,
+          abi: expressFactoryAbi,
+          functionName: 'ethUsdStampBandBps',
+        })
+        if (!cancelled) {
+          setStampBandBps(
+            typeof band === 'bigint' ? band : BigInt(band as number),
+          )
+        }
+      } catch {
+        if (!cancelled) setStampBandBps(null)
+      }
     })()
     return () => {
       cancelled = true
@@ -306,13 +330,13 @@ export function LaunchHost({
     const list: Check[] = []
 
     if (factoryAddr) {
-      if (factoryBandBps === null) {
+      if (factoryGenOk === null) {
         list.push({
           ok: false,
           label: 'factoryFingerprint',
           detail: 'probing factory fingerprint…',
         })
-      } else if (factoryBandBps === false) {
+      } else if (factoryGenOk === false) {
         list.push({
           ok: false,
           label: 'factoryFingerprint',
@@ -322,7 +346,7 @@ export function LaunchHost({
         list.push({
           ok: true,
           label: 'factoryFingerprint',
-          detail: factoryV3PassCopy(factoryAddr, factoryBandBps),
+          detail: factoryV4PassCopy(factoryAddr),
         })
       }
     }
@@ -406,7 +430,7 @@ export function LaunchHost({
     return list
   }, [
     factoryAddr,
-    factoryBandBps,
+    factoryGenOk,
     deploysEnabled,
     allowlistCount,
     allowed.data,
@@ -428,7 +452,7 @@ export function LaunchHost({
     onCorrectChain &&
     formValid &&
     allGreen &&
-    typeof factoryBandBps === 'bigint' &&
+    factoryGenOk === true &&
     !pairHardFail &&
     !busy &&
     Boolean(address) &&
@@ -770,12 +794,13 @@ export function LaunchHost({
                     <p className="check bad">could not read gas price</p>
                   )}
                   {liveEthUsdWad !== null &&
-                    typeof factoryBandBps === 'bigint' && (
+                    stampBandBps != null &&
+                    factoryGenOk === true && (
                       <p className="hint">
                         tier conversion at $
                         {(Number(liveEthUsdWad) / 1e18).toFixed(2)}
                         /ETH — you are filing this rate; the chain accepts it
-                        within ±{Number(factoryBandBps) / 100}% of its own
+                        within ±{Number(stampBandBps) / 100}% of its own
                         reading.
                       </p>
                     )}

@@ -1,4 +1,7 @@
-/** V4Adapter surface used for main-pool spot reads. */
+/**
+ * V4Adapter surface — slot0 reads + generation fingerprint (authorized).
+ * Errors from fix/express-mint:contracts/src/v4/V4Adapter.sol + IPoolManager.sol.
+ */
 export const v4AdapterAbi = [
   {
     type: 'function',
@@ -12,4 +15,15 @@ export const v4AdapterAbi = [
       { name: 'lpFee', type: 'uint24' },
     ],
   },
+  {
+    type: 'function',
+    name: 'authorized',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ type: 'bool' }],
+  },
+  // Access control on modifyLiquidity / initialize / pokeCollect (V4 generation)
+  { type: 'error', name: 'NotAuthorized', inputs: [] },
+  // syncToPrice rejects uninitialized pools (IPoolManager / V4Adapter)
+  { type: 'error', name: 'PoolNotInitialized', inputs: [] },
 ] as const

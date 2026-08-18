@@ -78,7 +78,7 @@ export const env = Object.freeze({
   testerAllowlist: parseAllowlist('VITE_TESTER_ALLOWLIST'),
   /** Decimal wei string for list() settle buffer. */
   listBufferWei: parseWeiString('VITE_LIST_BUFFER_WEI', '1000000'),
-  /** Express V3 deploy block (37291899). Prior factory floors orphaned with old addresses. */
+  /** Express V4 deploy block (38007365). Prior factory floors orphaned with old addresses. */
   indexFromBlock: parseOptionalUint('VITE_INDEX_FROM_BLOCK', 0),
   addrV4Adapter: optionalAddress('VITE_ADDR_V4_ADAPTER'),
   /** Uniswap v4 PoolManager — Swap event source (distinct from V4Adapter). */
@@ -89,7 +89,7 @@ export const env = Object.freeze({
   addrBuybackAccum: optionalAddress('VITE_ADDR_BUYBACK_ACCUM'),
   addrLadderSettlement: optionalAddress('VITE_ADDR_LADDER_SETTLEMENT'),
   addrVault: optionalAddress('VITE_ADDR_VAULT'),
-  /** Express V3: 0xb510…A338. V2 0x3eAb… and V1 0xdaA8… orphaned; cache key rotates on change. */
+  /** Express V4: 0xEe25…E94a. V3/V2/V1 orphaned; cache key rotates on change. */
   addrExpressFactory: optionalAddress('VITE_ADDR_EXPRESS_FACTORY'),
   addrLadderFactory: optionalAddress('VITE_ADDR_LADDER_FACTORY'),
   addrSafe: optionalAddress('VITE_ADDR_SAFE'),
