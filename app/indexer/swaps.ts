@@ -297,17 +297,15 @@ function persistListingMeta(
 /**
  * Resolve the Uniswap v4 PoolManager that emits Swap logs.
  *
- * Prefer VITE_ADDR_POOL_MANAGER when baked. Otherwise:
+ * Primary path (no env sync across generations):
  *   factory.poolManager() → V4Adapter, then adapter.manager() → PoolManager.
- * (factory.poolManager is the adapter, not the log address — verified live.)
- * Falls back to env.addrV4Adapter.manager() when factory hop fails.
+ * (factory.poolManager returns the adapter, not the Swap log address.)
+ * Fallback: env.addrV4Adapter.manager(), then optional VITE_ADDR_POOL_MANAGER.
  */
 export async function resolvePoolManager(
   client: PublicClient,
   factory: Address,
 ): Promise<Address> {
-  if (env.addrPoolManager) return env.addrPoolManager
-
   let adapter: Address | undefined
   try {
     const fromFactory = await client.readContract({
@@ -322,21 +320,21 @@ export async function resolvePoolManager(
     /* try env adapter */
   }
   if (!adapter) adapter = env.addrV4Adapter
-  if (!adapter) {
-    throw new Error(
-      'cannot resolve PoolManager — set VITE_ADDR_POOL_MANAGER or VITE_ADDR_V4_ADAPTER / Express factory',
-    )
+
+  if (adapter) {
+    const pm = await client.readContract({
+      address: adapter,
+      abi: v4AdapterAbi,
+      functionName: 'manager',
+    })
+    if (pm && pm.toLowerCase() !== zeroAddress) return pm
   }
 
-  const pm = await client.readContract({
-    address: adapter,
-    abi: v4AdapterAbi,
-    functionName: 'manager',
-  })
-  if (!pm || pm.toLowerCase() === zeroAddress) {
-    throw new Error(`adapter.manager() returned empty — adapter=${adapter}`)
-  }
-  return pm
+  if (env.addrPoolManager) return env.addrPoolManager
+
+  throw new Error(
+    'cannot resolve PoolManager — factory/adapter.manager() failed and VITE_ADDR_POOL_MANAGER is unset',
+  )
 }
 
 /**

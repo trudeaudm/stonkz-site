@@ -81,7 +81,10 @@ export const env = Object.freeze({
   /** Express V4 deploy block (38007365). Prior factory floors orphaned with old addresses. */
   indexFromBlock: parseOptionalUint('VITE_INDEX_FROM_BLOCK', 0),
   addrV4Adapter: optionalAddress('VITE_ADDR_V4_ADAPTER'),
-  /** Uniswap v4 PoolManager — Swap event source (distinct from V4Adapter). */
+  /**
+   * Optional Uniswap v4 PoolManager override (Swap log address).
+   * Prefer on-chain adapter.manager(); this is only a last-resort bake.
+   */
   addrPoolManager: optionalAddress('VITE_ADDR_POOL_MANAGER'),
   addrFeeHook: optionalAddress('VITE_ADDR_FEE_HOOK'),
   addrCtoGovernor: optionalAddress('VITE_ADDR_CTO_GOVERNOR'),
