@@ -131,7 +131,8 @@ export async function quoteExactIn(args: {
     }
 
     const pm = await resolvePoolManager(client, env.addrExpressFactory!)
-    let amountOut = 0n
+    let transferOut = 0n
+    let swapOut = 0n
     let sqrtAfter: bigint | null = null
 
     for (const log of call.logs ?? []) {
@@ -146,7 +147,7 @@ export async function quoteExactIn(args: {
             hop.zeroForOne &&
             d.args.to?.toLowerCase() === account.toLowerCase()
           ) {
-            amountOut += d.args.value as bigint
+            transferOut += d.args.value as bigint
           }
         } catch {
           /* not Transfer */
@@ -161,19 +162,26 @@ export async function quoteExactIn(args: {
           })
           sqrtAfter = d.args.sqrtPriceX96 as bigint
           if (!hop.zeroForOne) {
-            // sell: ETH out = amount0 (positive)
             const a0 = d.args.amount0 as bigint
-            if (a0 > 0n) amountOut = a0
-          } else if (amountOut === 0n) {
+            if (a0 > 0n) swapOut = a0
+          } else {
             const a1 = d.args.amount1 as bigint
-            if (a1 > 0n) amountOut = a1
+            if (a1 > 0n) swapOut = a1
           }
         } catch {
           /* not Swap */
         }
       }
-      // Native ETH has no Transfer — rely on Swap amount0 for sells.
     }
+
+    // Prefer the ERC20 Transfer to the trader; Swap amount is the same
+    // event counted once — never add both (tx 0xc9d66975 double-counted
+    // ~2× and set amountOutMinimum above the real out).
+    const amountOut = hop.zeroForOne
+      ? transferOut > 0n
+        ? transferOut
+        : swapOut
+      : swapOut
 
     if (amountOut <= 0n) {
       return { error: 'simulation succeeded but output was zero', quotedAt }

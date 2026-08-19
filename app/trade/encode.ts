@@ -1,7 +1,6 @@
 import {
   encodeAbiParameters,
   encodeFunctionData,
-  maxUint256,
   zeroAddress,
   type Address,
   type Hex,
@@ -88,9 +87,17 @@ export function encodeV4ExactInSingle(
   )
 }
 
+export const EXECUTE_DEADLINE_SECS = 5 * 60
+
+export function executeDeadline(
+  nowSec = Math.floor(Date.now() / 1000),
+): bigint {
+  return BigInt(nowSec + EXECUTE_DEADLINE_SECS)
+}
+
 export function buildExecuteCalldata(
   v4Input: Hex,
-  deadline: bigint = maxUint256,
+  deadline: bigint = executeDeadline(),
 ): Hex {
   const commands = (`0x` +
     UR_COMMAND_V4_SWAP.toString(16).padStart(2, '0')) as Hex

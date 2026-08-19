@@ -25,7 +25,7 @@ import {
   readSellAllowances,
   type AllowanceState,
 } from './allowances'
-import { encodeV4ExactInSingle } from './encode'
+import { encodeV4ExactInSingle, executeDeadline } from './encode'
 import { formatSwapError } from './errors'
 import {
   HOOK_FEE_BPS,
@@ -350,19 +350,36 @@ export function TradePanel({
       }
 
       const hop = quote.route.hops[0]!
+      const fresh = await quoteExactIn({
+        client,
+        account: address,
+        listing,
+        route: quote.route,
+        amountIn: quote.amountIn,
+        slippageBps,
+        spotEthPerToken,
+      })
+      if (!isQuoteSuccess(fresh)) {
+        push(fresh.error.slice(0, 80), 'err')
+        setQuoteErr(fresh.error)
+        setStale(true)
+        setBusy(false)
+        return
+      }
+      setQuote(fresh)
       const v4 = encodeV4ExactInSingle({
         poolKey: hop.poolKey,
         zeroForOne: hop.zeroForOne,
-        amountIn: quote.amountIn,
-        amountOutMinimum: quote.minAmountOut,
+        amountIn: fresh.amountIn,
+        amountOutMinimum: fresh.minAmountOut,
       })
       const commands = ('0x' + (0x10).toString(16).padStart(2, '0')) as `0x${string}`
       const hash = await writeContractAsync({
         address: ur,
         abi: universalRouterAbi,
         functionName: 'execute',
-        args: [commands, [v4], maxUint256],
-        value: quote.value,
+        args: [commands, [v4], executeDeadline()],
+        value: fresh.value,
       })
       await client.waitForTransactionReceipt({ hash })
       push(side === 'buy' ? 'bought' : 'sold', 'ok')

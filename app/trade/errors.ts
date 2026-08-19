@@ -110,13 +110,38 @@ function extractRaw(err: unknown): Hex | null {
   if (typeof err === 'string' && err.startsWith('0x') && err.length >= 10) {
     return err as Hex
   }
-  if (err && typeof err === 'object' && 'data' in err) {
-    const d = (err as { data?: unknown }).data
-    if (typeof d === 'string' && d.startsWith('0x') && d.length >= 10) {
-      return d as Hex
+  let cur: unknown = err
+  for (let i = 0; i < 10 && cur; i++) {
+    if (typeof cur === 'object' && cur) {
+      const o = cur as { data?: unknown; raw?: unknown; details?: unknown }
+      for (const c of [o.data, o.raw, o.details]) {
+        if (typeof c === 'string' && c.startsWith('0x') && c.length >= 10) {
+          return c as Hex
+        }
+        if (
+          c &&
+          typeof c === 'object' &&
+          'data' in c &&
+          typeof (c as { data: unknown }).data === 'string'
+        ) {
+          const d = (c as { data: string }).data
+          if (d.startsWith('0x') && d.length >= 10) return d as Hex
+        }
+      }
     }
+    if (typeof cur === 'object' && cur && 'cause' in cur) {
+      cur = (cur as { cause: unknown }).cause
+    } else break
   }
   return null
+}
+
+function friendlySwapName(name: string, args: readonly unknown[]): string {
+  if (name === 'V4TooLittleReceived') {
+    return 'price moved, raise slippage — V4TooLittleReceived'
+  }
+  if (args.length > 0) return `${name}(${args.map(String).join(', ')})`
+  return name
 }
 
 /** Decode UR / v4 / Permit2 / hook reverts; fall back to pipeline + raw selector. */
@@ -125,10 +150,7 @@ export function formatSwapError(err: unknown): string {
   if (raw) {
     try {
       const decoded = decodeErrorResult({ abi: swapErrorAbi, data: raw })
-      if (decoded.args && decoded.args.length > 0) {
-        return `${decoded.errorName}(${decoded.args.map(String).join(', ')})`
-      }
-      return decoded.errorName
+      return friendlySwapName(decoded.errorName, decoded.args ?? [])
     } catch {
       return `unrecognized revert selector=${raw.slice(0, 10)} data=${raw}`
     }
