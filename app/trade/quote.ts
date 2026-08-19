@@ -147,6 +147,7 @@ export async function quoteExactIn(args: {
             hop.zeroForOne &&
             d.args.to?.toLowerCase() === account.toLowerCase()
           ) {
+            // Source: ERC-20 Transfer to trader. Do not also add Swap amount1.
             transferOut += d.args.value as bigint
           }
         } catch {
@@ -161,6 +162,8 @@ export async function quoteExactIn(args: {
             topics: log.topics,
           })
           sqrtAfter = d.args.sqrtPriceX96 as bigint
+          // Source: PoolManager Swap deltas. Used only when Transfer is
+          // absent (native ETH out). Never added to transferOut.
           if (!hop.zeroForOne) {
             const a0 = d.args.amount0 as bigint
             if (a0 > 0n) swapOut = a0
@@ -174,9 +177,10 @@ export async function quoteExactIn(args: {
       }
     }
 
-    // Prefer the ERC20 Transfer to the trader; Swap amount is the same
-    // event counted once — never add both (tx 0xc9d66975 double-counted
-    // ~2× and set amountOutMinimum above the real out).
+    // Source: ERC-20 Transfer to the trader if present, else Swap amount1.
+    // Never sum both — they are the same fill (failed buy 0xc9d66975: min
+    // was ~2× real out → V4TooLittleReceived). Sells: Swap amount0 only
+    // (native ETH has no Transfer).
     const amountOut = hop.zeroForOne
       ? transferOut > 0n
         ? transferOut

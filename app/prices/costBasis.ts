@@ -25,6 +25,7 @@ function tokenSideAmounts(
   token: Address,
   ev: IndexedSwap,
 ): { tokenDelta: bigint; pairDelta: bigint } {
+  // PoolManager Swap amounts only. Transfer of the same fill is not a second leg.
   const a0 = BigInt(ev.amount0)
   const a1 = BigInt(ev.amount1)
   const tok0 = store.key.currency0.toLowerCase() === token.toLowerCase()

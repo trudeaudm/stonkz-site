@@ -74,6 +74,8 @@ type SwapArgs = {
 }
 
 function parseSwapLog(log: Log): IndexedSwap | null {
+  // Amounts are PoolManager Swap event deltas only — never ERC-20 Transfer.
+  // Transfer of the same movement would double-count volume (quote bug 0xc9d66975).
   if (!log.args || typeof log.args !== 'object') return null
   const a = log.args as Partial<SwapArgs>
   if (
@@ -114,6 +116,8 @@ function accumulateVolumes(
   ev: IndexedSwap,
   token: Address,
 ): void {
+  // Pair/token volume: one abs() per Swap event. ETH is currency0; pair-side
+  // is abs(amount0). Do not add Transfer values — same movement, already in Swap.
   const a0 = BigInt(ev.amount0)
   const a1 = BigInt(ev.amount1)
   const abs0 = a0 < 0n ? -a0 : a0
@@ -393,6 +397,9 @@ export async function scanListingSwaps(
         if (controls?.signal?.aborted) throw new Error('swap scan aborted')
         const to = cursor + chunk - 1n > head ? head : cursor + chunk - 1n
         try {
+          // Source: PoolManager Swap only (never ERC-20 Transfer). Transfer
+          // of the same movement is already in amount0/amount1 — summing both
+          // double-counts volume (same class of bug as quote 0xc9d66975).
           const logs = await client.getLogs({
             address: pm,
             event: poolManagerSwapAbi[0],
@@ -578,6 +585,7 @@ export function effectiveVolumePairRaw(
   let vol = 0n
   const tok0 = store.key.currency0.toLowerCase() === token.toLowerCase()
   for (const ev of store.events) {
+    // Re-sum from indexed Swap events only (same rule as accumulateVolumes).
     const a0 = BigInt(ev.amount0)
     const a1 = BigInt(ev.amount1)
     const abs0 = a0 < 0n ? -a0 : a0

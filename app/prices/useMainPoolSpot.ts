@@ -220,6 +220,7 @@ export function swapDirection(
   token: `0x${string}`,
   ev: IndexedSwap,
 ): 'buy' | 'sell' {
+  // Direction from PoolManager Swap token-side delta only (not Transfer).
   const tok0 = store.key.currency0.toLowerCase() === token.toLowerCase()
   const tokenDelta = BigInt(tok0 ? ev.amount0 : ev.amount1)
   return tokenDelta > 0n ? 'buy' : 'sell'
