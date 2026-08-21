@@ -1,7 +1,7 @@
 # Express vanity / salt recon
 
-Source: `C:\Users\david\stonkz` at `HEAD` = `302834ff1c1404d856760ca0caa0ef9363613ae8`
-(`git -C C:\Users\david\stonkz show HEAD:<path>` only; dirty tree not read).
+Source: `C:\Users\david\stonkz-project\stonkz` at `HEAD` = `302834ff1c1404d856760ca0caa0ef9363613ae8`
+(`git -C C:\Users\david\stonkz-project\stonkz show HEAD:<path>` only; dirty tree not read).
 
 **Stop-condition verdict: CONTINUE.** VanityPrefixMismatch is enforced
 unconditionally on `list()`. Salt + CREATE2 are fully replicable client-side from
@@ -432,7 +432,7 @@ const value = pairToken === zeroAddress ? listBufferWei() : 0n
 
 ## CORRECTION 2026-08-14: deployed != HEAD
 
-Authority: `C:\Users\david\stonkz-deployed-truth.md` (read-only; not in this repo).
+Authority: `C:\Users\david\stonkz-project\reports\stonkz-deployed-truth.md` (read-only; not in this repo).
 
 Live **ExpressFactory**, **LadderFactory**, and **FeeHook** bytecode match the
 contracts repo's **dirty working-tree (disk) build**, not git HEAD. Broadcast
