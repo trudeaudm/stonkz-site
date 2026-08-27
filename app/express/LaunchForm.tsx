@@ -590,15 +590,16 @@ export function LaunchHost({
           <div className={`wizard-grid ${!onCorrectChain ? 'disabled-surface' : ''}`}>
             <div className="launch-form">
               <div className="seg" role="group" aria-label="launch route">
-                <button
-                  type="button"
-                  className="btn95 route-disabled"
-                  disabled
-                  title="ladder auctions are not open yet"
+                <a
+                  className="btn95"
+                  href="#/ladder"
+                  title="ladder auctions — open the ipo desk"
                 >
                   <div>🔨 IPO (bookbuild) — market decide the price</div>
-                  <div className="s-d">ladder auctions are not open yet</div>
-                </button>
+                  <div className="s-d">
+                    ladder auctions · bid into a live book
+                  </div>
+                </a>
                 <button type="button" className="btn95 on" aria-pressed="true">
                   <div>⚡ instant coin — you fund likwidity. live now</div>
                   <div className="s-d">express listing · live on chain</div>

@@ -8,11 +8,13 @@ function short(addr: string) {
 
 export function MarketHeader({
   onMakeCoin,
+  onLadder,
   onMyStuff,
   onForum,
   onAccount,
 }: {
   onMakeCoin: () => void
+  onLadder: () => void
   onMyStuff: () => void
   onForum: () => void
   onAccount: () => void
@@ -54,6 +56,14 @@ export function MarketHeader({
       <nav className="topnav">
         <button type="button" className="btn95 go" onClick={onMakeCoin}>
           ＋ make coin
+        </button>
+        <button
+          type="button"
+          className="btn95"
+          onClick={onLadder}
+          title="ladder auctions — the market sets the price"
+        >
+          🪜 ipo desk
         </button>
         <button type="button" className="btn95" onClick={onMyStuff}>
           🧍 my stuff

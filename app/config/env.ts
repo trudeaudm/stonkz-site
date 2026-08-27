@@ -9,10 +9,18 @@ function read(name: string): string | undefined {
   return s === '' ? undefined : s
 }
 
+// http is allowed for LOOPBACK ONLY, so the app can be pointed at a local anvil fork. Without this the
+// ladder UI could not be exercised against a real deploy before shipping, since a fork is reachable only over
+// http on 127.0.0.1 — and the alternative (test first on staging) is the more dangerous one.
+// Loopback is not a weakening: it cannot be a remote endpoint, so there is no credential or MITM surface.
+const LOOPBACK = /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?(\/|$)/
+
 function requireHttps(name: string): string {
   const value = read(name)
-  if (!value || !value.startsWith('https://')) {
-    throw new Error(`${name} must start with https:// (got ${JSON.stringify(value)})`)
+  if (!value || !(value.startsWith('https://') || LOOPBACK.test(value))) {
+    throw new Error(
+      `${name} must start with https:// (or http:// on 127.0.0.1/localhost for a local fork) (got ${JSON.stringify(value)})`,
+    )
   }
   return value
 }

@@ -17,7 +17,9 @@ export type WinId =
   | 'account'
   | 'my_stuff'
   | 'forum'
+  | 'ladder_list'
   | `token:${string}`
+  | `ladder:${string}`
 
 export type WinDef = {
   id: WinId

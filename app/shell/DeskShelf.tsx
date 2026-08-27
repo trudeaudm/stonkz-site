@@ -8,7 +8,9 @@ function glyph(id: WinId): string {
   if (id === 'account') return '👛'
   if (id === 'certificate') return '📜'
   if (id === 'activity_log') return '🖥'
+  if (id === 'ladder_list') return '🪜'
   if (id.startsWith('token:')) return '📁'
+  if (id.startsWith('ladder:')) return '🪜'
   return '🗔'
 }
 
@@ -18,8 +20,12 @@ function routeFor(id: WinId): string | null {
   }
   if (id === 'my_stuff') return '#/me'
   if (id === 'forum') return '#/forum'
+  if (id === 'ladder_list') return '#/ladder'
   if (id.startsWith('token:')) {
     return `#/tok/${id.slice('token:'.length)}`
+  }
+  if (id.startsWith('ladder:')) {
+    return `#/ladder/${id.slice('ladder:'.length)}`
   }
   return null
 }

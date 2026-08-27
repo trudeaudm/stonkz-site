@@ -5,6 +5,8 @@ import { LaunchHost } from './express/LaunchForm'
 import { TokenWindow } from './express/ListingDetail'
 import { ChainGuard } from './gate/ChainGuard'
 import { GateScreen } from './gate/GateScreen'
+import { LadderDetailWindow } from './ladder/LadderDetailWindow'
+import { LadderListWindow } from './ladder/LadderListWindow'
 import { ActivityLogDock } from './market/ActivityLogDock'
 import { HeroHeadline } from './market/HeroHeadline'
 import { LeagueTeaser } from './market/LeagueTeaser'
@@ -15,6 +17,7 @@ import { TickerTape } from './market/TickerTape'
 import { AccountWindow } from './shell/AccountWindow'
 import { DeskShelf } from './shell/DeskShelf'
 import { IndexProvider } from './shell/IndexProvider'
+import { LadderIndexProvider } from './shell/LadderIndexProvider'
 import { MyStuffWindow } from './shell/MyStuffWindow'
 import { Scenery } from './shell/Scenery'
 import { ToastProvider } from './shell/Toast'
@@ -31,6 +34,8 @@ type Route =
   | { name: 'forum' }
   | { name: 'thread'; id: string }
   | { name: 'detail'; listing: Address }
+  | { name: 'ladder' }
+  | { name: 'auction'; auction: Address }
 
 function parseHash(): Route {
   const raw = window.location.hash.replace(/^#\/?/, '')
@@ -60,6 +65,12 @@ function parseHash(): Route {
   if (parts[0] === 'tok' && parts[1] && isAddress(parts[1])) {
     return { name: 'detail', listing: getAddress(parts[1]) }
   }
+  if (parts[0] === 'ladder') {
+    if (parts[1] && isAddress(parts[1])) {
+      return { name: 'auction', auction: getAddress(parts[1]) }
+    }
+    return { name: 'ladder' }
+  }
   return { name: 'home' }
 }
 
@@ -69,7 +80,10 @@ function navigate(route: Route) {
   else if (route.name === 'me') window.location.hash = '#/me'
   else if (route.name === 'forum') window.location.hash = '#/forum'
   else if (route.name === 'thread') window.location.hash = `#/thread/${route.id}`
-  else window.location.hash = `#/tok/${route.listing}`
+  else if (route.name === 'ladder') window.location.hash = '#/ladder'
+  else if (route.name === 'auction') {
+    window.location.hash = `#/ladder/${route.auction}`
+  } else window.location.hash = `#/tok/${route.listing}`
 }
 
 function MarketPage() {
@@ -78,43 +92,46 @@ function MarketPage() {
     typeof window === 'undefined' ? { name: 'home' } : parseHash(),
   )
   const [tokenListing, setTokenListing] = useState<Address | null>(null)
+  const [auctionAddr, setAuctionAddr] = useState<Address | null>(null)
 
   const syncFromRoute = useCallback(
     (r: Route) => {
+      const dropToken = () =>
+        setTokenListing((prev) => {
+          if (prev) close(`token:${prev}` as WinId)
+          return null
+        })
+      const dropAuction = () =>
+        setAuctionAddr((prev) => {
+          if (prev) close(`ladder:${prev}` as WinId)
+          return null
+        })
+
       if (r.name !== 'make') {
         close('make_coin')
         close('precheck')
       }
       if (r.name !== 'me') close('my_stuff')
       if (r.name !== 'forum' && r.name !== 'thread') close('forum')
+      if (r.name !== 'ladder' && r.name !== 'auction') close('ladder_list')
+      if (r.name !== 'detail') dropToken()
+      if (r.name !== 'auction') dropAuction()
 
       if (r.name === 'make') {
         open('make_coin', 'make_coin.exe')
         open('precheck', 'precheck.exe')
-        setTokenListing((prev) => {
-          if (prev) close(`token:${prev}` as WinId)
-          return null
-        })
       } else if (r.name === 'me') {
         open('my_stuff', 'my_stuff.exe')
-        setTokenListing((prev) => {
-          if (prev) close(`token:${prev}` as WinId)
-          return null
-        })
       } else if (r.name === 'forum' || r.name === 'thread') {
         open('forum', 'stonkz_forum.exe')
-        setTokenListing((prev) => {
-          if (prev) close(`token:${prev}` as WinId)
-          return null
-        })
       } else if (r.name === 'detail') {
         setTokenListing(r.listing)
         open(`token:${r.listing}` as WinId, 'token.exe')
-      } else {
-        setTokenListing((prev) => {
-          if (prev) close(`token:${prev}` as WinId)
-          return null
-        })
+      } else if (r.name === 'ladder') {
+        open('ladder_list', 'ipo_desk.exe')
+      } else if (r.name === 'auction') {
+        setAuctionAddr(r.auction)
+        open(`ladder:${r.auction}` as WinId, 'ipo.exe')
       }
     },
     [open, close],
@@ -156,6 +173,22 @@ function MarketPage() {
     setRoute({ name: 'forum' })
   }, [open])
 
+  const goLadder = useCallback(() => {
+    open('ladder_list', 'ipo_desk.exe')
+    navigate({ name: 'ladder' })
+    setRoute({ name: 'ladder' })
+  }, [open])
+
+  const openAuction = useCallback(
+    (auction: Address) => {
+      setAuctionAddr(auction)
+      open(`ladder:${auction}` as WinId, 'ipo.exe')
+      navigate({ name: 'auction', auction })
+      setRoute({ name: 'auction', auction })
+    },
+    [open],
+  )
+
   const openToken = useCallback(
     (listing: Address) => {
       setTokenListing(listing)
@@ -178,6 +211,7 @@ function MarketPage() {
       <div className="wrap">
         <MarketHeader
           onMakeCoin={goMake}
+          onLadder={goLadder}
           onMyStuff={goMe}
           onForum={goForum}
           onAccount={() => {
@@ -258,6 +292,27 @@ function MarketPage() {
           {isOpen('forum') && route.name === 'forum' && (
             <ForumList onClose={closeForum} />
           )}
+          {isOpen('ladder_list') && (
+            <LadderListWindow
+              onOpen={openAuction}
+              onClose={() => {
+                close('ladder_list')
+                navigate({ name: 'home' })
+                setRoute({ name: 'home' })
+              }}
+            />
+          )}
+          {auctionAddr && isOpen(`ladder:${auctionAddr}` as WinId) && (
+            <LadderDetailWindow
+              auction={auctionAddr}
+              onClose={() => {
+                close(`ladder:${auctionAddr}` as WinId)
+                setAuctionAddr(null)
+                navigate({ name: 'ladder' })
+                setRoute({ name: 'ladder' })
+              }}
+            />
+          )}
           {isOpen('account') && (
             <AccountWindow onClose={() => close('account')} />
           )}
@@ -274,7 +329,9 @@ export function App() {
         <div className="app mw-app">
           <GateScreen>
             <IndexProvider>
-              <MarketPage />
+              <LadderIndexProvider>
+                <MarketPage />
+              </LadderIndexProvider>
             </IndexProvider>
           </GateScreen>
         </div>
