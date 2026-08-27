@@ -563,6 +563,19 @@ export const ladderAuctionAbi = [
     },
     {
       "type": "function",
+      "name": "periodsBehind",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16",
+          "internalType": "uint16"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "placeBid",
       "inputs": [
         {
@@ -1205,6 +1218,17 @@ export const ladderAuctionAbi = [
       "type": "error",
       "name": "AuctionFinished",
       "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "BookBehind",
+      "inputs": [
+        {
+          "name": "behind",
+          "type": "uint16",
+          "internalType": "uint16"
+        }
+      ]
     },
     {
       "type": "error",

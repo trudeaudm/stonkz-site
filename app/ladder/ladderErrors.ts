@@ -13,6 +13,11 @@ const HUMAN: Record<string, string> = {
   AuctionFinished: 'the bell already rang — this book takes no more bids',
   TooManyUniques:
     'this book is full — it has hit its cap on unique bidders and cannot take a new wallet',
+  // Recoverable, and the ONLY error here whose fix is a button on this same screen: the book is behind the
+  // clock and a bid may not enter until it is level. Catch-up is capped per call, so a large gap needs several
+  // pokes — which is the point, since it used to be one unbounded transaction that ran out of gas.
+  BookBehind:
+    'this book is behind its clock and cannot take a bid until it catches up — poke it (more than once if the gap is large), then bid',
   NothingToClaim: 'nothing owed to this wallet',
   NotDone: 'the auction is still live',
   NotGraduated:

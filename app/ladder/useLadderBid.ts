@@ -117,7 +117,7 @@ export function useLadderBid(
 
         // Fresh price/done: the index poll is 12s behind and both gates are
         // evaluated after placeBid's own _sync().
-        const [livePrice, done] = await Promise.all([
+        const [livePrice, done, behind] = await Promise.all([
           client.readContract({
             address: a.auction,
             abi: ladderAuctionAbi,
@@ -128,9 +128,25 @@ export function useLadderBid(
             abi: ladderAuctionAbi,
             functionName: 'done',
           }),
+          client.readContract({
+            address: a.auction,
+            abi: ladderAuctionAbi,
+            functionName: 'periodsBehind',
+          }),
         ])
         if (done) {
           return fail('the bell already rang — this book takes no more bids')
+        }
+        // placeBid reverts BookBehind while the book owes periods, so catch it here rather than paying gas to
+        // learn it. Catch-up is capped per call (MAX_PERIODS_PER_SYNC = 64), which is why a large gap needs
+        // several pokes — say so, because "poke it" alone would look broken when one poke is not enough.
+        if (behind > 0) {
+          const pokes = Math.ceil(Number(behind) / 64)
+          return fail(
+            `this book is ${behind} period(s) behind its clock and will not take a bid until it catches up — poke it${
+              pokes > 1 ? ` about ${pokes} times` : ''
+            }, then bid`,
+          )
         }
 
         const min = minBidRaw(a)
