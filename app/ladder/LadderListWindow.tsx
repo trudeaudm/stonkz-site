@@ -58,6 +58,13 @@ function AuctionCard({
   const status = deriveLadderStatus(auction.state)
   const raiseFrac = ratioOf(auction.state.raised, auction.threshold)
   const unit = pairLabel(auction, pairSymbol)
+  // See the detail window: committed budget is not yet `raised`, and the gate reads `raised`. A card at 0%
+  // with real money in the book reads as broken, so surface the queued amount here too.
+  const queuedWad = (() => {
+    const committed = BigInt(auction.state.committedTotal)
+    const raised = BigInt(auction.state.raised)
+    return committed > raised ? committed - raised : 0n
+  })()
 
   return (
     <StaticWin
@@ -95,6 +102,12 @@ function AuctionCard({
         {LADDER_STATUS_LONG[status]} · {formatClock(auction, nowSec)} · period{' '}
         {auction.state.periodIndex}/{auction.n || 1000}
       </div>
+
+      {queuedWad > 0n && (
+        <div className="mono" style={{ fontSize: 11 }}>
+          + {formatPairWad(queuedWad.toString())} {unit} committed, not yet converted
+        </div>
+      )}
 
       <button
         type="button"

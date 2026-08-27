@@ -343,6 +343,15 @@ export function LadderDetailWindow({
   const gateShare = thresholdShareOfFloor(a)
   const cells = toLadderPeriodCells(periodStore, n)
 
+  // Committed budget that has NOT yet converted into `raised`. These are different quantities and the gate
+  // reads the second one, so a freshly bid book legitimately sits at 0% of gate with real money committed —
+  // which looks broken unless we say so. Worth spelling out rather than conflating the two.
+  const queuedWad = (() => {
+    const committed = BigInt(state.committedTotal)
+    const raised = BigInt(state.raised)
+    return committed > raised ? committed - raised : 0n
+  })()
+
   const bidDisabled = (() => {
     if (!isConnected) return 'connect a wallet to bid'
     if (!onCorrectChain) return 'wrong network — switch before you bid'
@@ -446,6 +455,17 @@ export function LadderDetailWindow({
           : ''}
         . under it, the book fails and everyone is refunded in full.
       </p>
+      {queuedWad > 0n && (
+        <p className="hint" style={{ textAlign: 'left', marginTop: 0 }}>
+          <b>
+            {formatPairWad(queuedWad.toString())} {unit} of budget is committed but not yet
+            converted.
+          </b>{' '}
+          a bid is a <i>budget</i>, not a purchase: it converts into `raised` only as periods clear
+          and tokens actually change hands ({state.periodIndex} of {n} cleared so far). so the bar
+          above can read 0% while the book is fully funded — poke it, or wait for the next period.
+        </p>
+      )}
 
       <div className="win" style={{ marginTop: 12 }}>
         <div className="title">🔍 the book</div>

@@ -15,6 +15,7 @@ import type {
   LadderStatus,
   LadderWalletFill,
 } from '../indexer/ladderTypes'
+import { waitForSuccess } from '../shell/tx'
 import { formatLadderError } from './ladderErrors'
 
 export type LadderActionKind = 'poke' | 'settle' | 'claimTokens' | 'claimRefund'
@@ -169,7 +170,7 @@ export function useLadderActions(
         setTxHash(hash)
 
         setStatus('waiting for the receipt')
-        await client.waitForTransactionReceipt({ hash })
+        await waitForSuccess(client, hash, kind)
         setStatus(`${kind} done`)
         optsRef.current?.onDone?.(kind)
         setPending(null)

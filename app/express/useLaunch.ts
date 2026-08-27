@@ -23,6 +23,7 @@ import {
   predictTokenAddressLocal,
 } from '../mining/create2'
 import { mineVanitySalt } from '../mining/mineVanity'
+import { waitForSuccess } from '../shell/tx'
 import {
   FACTORY_V2_FAIL_COPY,
   fingerprintExpressFactoryV4,
@@ -428,9 +429,9 @@ export function useLaunch() {
         current = 'receipt'
         setStep(current)
         setStatus('7/7 waitForTransactionReceipt')
-        const txReceipt = await publicClient.waitForTransactionReceipt({
-          hash: txHash,
-        })
+        // Assert success rather than inclusion. On a revert the logs below are simply absent, which surfaced
+        // as a confusing "could not find ExpressListed" instead of "the launch reverted". See shell/tx.ts.
+        const txReceipt = await waitForSuccess(publicClient, txHash, 'the launch')
 
         let listing: Address | undefined
         let token: Address | undefined

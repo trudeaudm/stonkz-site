@@ -23,6 +23,7 @@ import {
   pairDecimals,
   type IndexedAuction,
 } from '../indexer/ladderTypes'
+import { waitForSuccess } from '../shell/tx'
 import { formatLadderError } from './ladderErrors'
 import {
   formatPriceWad,
@@ -200,7 +201,7 @@ export function useLadderBid(
               functionName: 'approve',
               args: [a.auction, sizeRaw],
             })
-            await client.waitForTransactionReceipt({ hash: approveHash })
+            await waitForSuccess(client, approveHash, 'the approval')
           }
         }
 
@@ -231,7 +232,8 @@ export function useLadderBid(
 
         setStep('receipt')
         setStatus('5/5 waitForTransactionReceipt')
-        await client.waitForTransactionReceipt({ hash })
+        // Must assert status, not just inclusion: a reverted bid used to report "bid in" (see shell/tx.ts).
+        await waitForSuccess(client, hash, 'the bid')
 
         setStep('done')
         setStatus(`bid in — ${human(sizeRaw)} committed`)

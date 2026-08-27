@@ -36,6 +36,7 @@ import {
 import { resolveRoute } from './router'
 import { universalRouterAbi } from '../abi/universalRouter'
 import { MAIN_POOL_SELLS_ENABLED } from './flags'
+import { waitForSuccess } from '../shell/tx'
 
 const SLIPPAGE_KEY = 'stonkz:trade:slippageBps'
 const DEFAULT_SLIPPAGE_BPS = 100n // 1%
@@ -381,9 +382,10 @@ export function TradePanel({
         args: [commands, [v4], executeDeadline()],
         value: fresh.value,
       })
-      await client.waitForTransactionReceipt({ hash })
-      push(side === 'buy' ? 'bought' : 'sold', 'ok')
-      confetti()
+        // Assert success, not just inclusion — this used to fire the confetti on a reverted swap.
+        await waitForSuccess(client, hash, side === 'buy' ? 'the buy' : 'the sell')
+        push(side === 'buy' ? 'bought' : 'sold', 'ok')
+        confetti()
       void ethBal.refetch?.()
       void tokenBal.refetch?.()
       void rescanSwaps?.()

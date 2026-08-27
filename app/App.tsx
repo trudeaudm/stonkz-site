@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getAddress, isAddress, type Address } from 'viem'
 import { ForumList, ForumThread } from './forum/ForumView'
 import { LaunchHost } from './express/LaunchForm'
@@ -93,19 +93,36 @@ function MarketPage() {
   )
   const [tokenListing, setTokenListing] = useState<Address | null>(null)
   const [auctionAddr, setAuctionAddr] = useState<Address | null>(null)
+  // Mirrors of the two above, updated in lockstep by the setters below. syncFromRoute needs to know which
+  // window is currently open in order to close it, but it must not read that from a setState updater (an
+  // updater has to be pure) nor take it as a dep (that would rebuild the callback and re-run the hashchange
+  // effect on every navigation). Always go through setToken/setAuction so the two never diverge.
+  const tokenRef = useRef<Address | null>(null)
+  const auctionRef = useRef<Address | null>(null)
+  const setToken = useCallback((v: Address | null) => {
+    tokenRef.current = v
+    setTokenListing(v)
+  }, [])
+  const setAuction = useCallback((v: Address | null) => {
+    auctionRef.current = v
+    setAuctionAddr(v)
+  }, [])
 
   const syncFromRoute = useCallback(
     (r: Route) => {
-      const dropToken = () =>
-        setTokenListing((prev) => {
-          if (prev) close(`token:${prev}` as WinId)
-          return null
-        })
-      const dropAuction = () =>
-        setAuctionAddr((prev) => {
-          if (prev) close(`ladder:${prev}` as WinId)
-          return null
-        })
+      // Read the open window from a ref, NOT from a setState updater. An updater must be pure: React may
+      // run it during the render phase, and `close` sets state on WindowManagerProvider — which is exactly
+      // the "Cannot update a component while rendering a different component" warning this used to emit.
+      const dropToken = () => {
+        const prev = tokenRef.current
+        if (prev) close(`token:${prev}` as WinId)
+        setToken(null)
+      }
+      const dropAuction = () => {
+        const prev = auctionRef.current
+        if (prev) close(`ladder:${prev}` as WinId)
+        setAuction(null)
+      }
 
       if (r.name !== 'make') {
         close('make_coin')
@@ -125,16 +142,16 @@ function MarketPage() {
       } else if (r.name === 'forum' || r.name === 'thread') {
         open('forum', 'stonkz_forum.exe')
       } else if (r.name === 'detail') {
-        setTokenListing(r.listing)
+        setToken(r.listing)
         open(`token:${r.listing}` as WinId, 'token.exe')
       } else if (r.name === 'ladder') {
         open('ladder_list', 'ipo_desk.exe')
       } else if (r.name === 'auction') {
-        setAuctionAddr(r.auction)
+        setAuction(r.auction)
         open(`ladder:${r.auction}` as WinId, 'ipo.exe')
       }
     },
-    [open, close],
+    [open, close, setToken, setAuction],
   )
 
   useEffect(() => {
@@ -181,7 +198,7 @@ function MarketPage() {
 
   const openAuction = useCallback(
     (auction: Address) => {
-      setAuctionAddr(auction)
+      setAuction(auction)
       open(`ladder:${auction}` as WinId, 'ipo.exe')
       navigate({ name: 'auction', auction })
       setRoute({ name: 'auction', auction })
@@ -191,7 +208,7 @@ function MarketPage() {
 
   const openToken = useCallback(
     (listing: Address) => {
-      setTokenListing(listing)
+      setToken(listing)
       open(`token:${listing}` as WinId, 'token.exe')
       navigate({ name: 'detail', listing })
       setRoute({ name: 'detail', listing })
@@ -270,7 +287,7 @@ function MarketPage() {
               listing={tokenListing}
               onClose={() => {
                 close(`token:${tokenListing}` as WinId)
-                setTokenListing(null)
+                setToken(null)
                 navigate({ name: 'home' })
                 setRoute({ name: 'home' })
               }}
@@ -307,7 +324,7 @@ function MarketPage() {
               auction={auctionAddr}
               onClose={() => {
                 close(`ladder:${auctionAddr}` as WinId)
-                setAuctionAddr(null)
+                setAuction(null)
                 navigate({ name: 'ladder' })
                 setRoute({ name: 'ladder' })
               }}
