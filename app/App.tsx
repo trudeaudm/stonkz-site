@@ -6,6 +6,7 @@ import { TokenWindow } from './express/ListingDetail'
 import { ChainGuard } from './gate/ChainGuard'
 import { GateScreen } from './gate/GateScreen'
 import { LadderDetailWindow } from './ladder/LadderDetailWindow'
+import { LadderFileForm } from './ladder/LadderFileForm'
 import { LadderListWindow } from './ladder/LadderListWindow'
 import { ActivityLogDock } from './market/ActivityLogDock'
 import { HeroHeadline } from './market/HeroHeadline'
@@ -35,6 +36,7 @@ type Route =
   | { name: 'thread'; id: string }
   | { name: 'detail'; listing: Address }
   | { name: 'ladder' }
+  | { name: 'ladderFile' }
   | { name: 'auction'; auction: Address }
 
 function parseHash(): Route {
@@ -66,6 +68,7 @@ function parseHash(): Route {
     return { name: 'detail', listing: getAddress(parts[1]) }
   }
   if (parts[0] === 'ladder') {
+    if (parts[1] === 'file') return { name: 'ladderFile' }
     if (parts[1] && isAddress(parts[1])) {
       return { name: 'auction', auction: getAddress(parts[1]) }
     }
@@ -81,6 +84,7 @@ function navigate(route: Route) {
   else if (route.name === 'forum') window.location.hash = '#/forum'
   else if (route.name === 'thread') window.location.hash = `#/thread/${route.id}`
   else if (route.name === 'ladder') window.location.hash = '#/ladder'
+  else if (route.name === 'ladderFile') window.location.hash = '#/ladder/file'
   else if (route.name === 'auction') {
     window.location.hash = `#/ladder/${route.auction}`
   } else window.location.hash = `#/tok/${route.listing}`
@@ -130,7 +134,10 @@ function MarketPage() {
       }
       if (r.name !== 'me') close('my_stuff')
       if (r.name !== 'forum' && r.name !== 'thread') close('forum')
-      if (r.name !== 'ladder' && r.name !== 'auction') close('ladder_list')
+      if (r.name !== 'ladder' && r.name !== 'auction' && r.name !== 'ladderFile') {
+        close('ladder_list')
+      }
+      if (r.name !== 'ladderFile') close('ladder_file')
       if (r.name !== 'detail') dropToken()
       if (r.name !== 'auction') dropAuction()
 
@@ -146,6 +153,8 @@ function MarketPage() {
         open(`token:${r.listing}` as WinId, 'token.exe')
       } else if (r.name === 'ladder') {
         open('ladder_list', 'ipo_desk.exe')
+      } else if (r.name === 'ladderFile') {
+        open('ladder_file', 'file_book.exe')
       } else if (r.name === 'auction') {
         setAuction(r.auction)
         open(`ladder:${r.auction}` as WinId, 'ipo.exe')
@@ -194,6 +203,12 @@ function MarketPage() {
     open('ladder_list', 'ipo_desk.exe')
     navigate({ name: 'ladder' })
     setRoute({ name: 'ladder' })
+  }, [open])
+
+  const goLadderFile = useCallback(() => {
+    open('ladder_file', 'file_book.exe')
+    navigate({ name: 'ladderFile' })
+    setRoute({ name: 'ladderFile' })
   }, [open])
 
   const openAuction = useCallback(
@@ -312,10 +327,21 @@ function MarketPage() {
           {isOpen('ladder_list') && (
             <LadderListWindow
               onOpen={openAuction}
+              onFile={goLadderFile}
               onClose={() => {
                 close('ladder_list')
                 navigate({ name: 'home' })
                 setRoute({ name: 'home' })
+              }}
+            />
+          )}
+          {isOpen('ladder_file') && (
+            <LadderFileForm
+              onOpen={openAuction}
+              onClose={() => {
+                close('ladder_file')
+                navigate({ name: 'ladder' })
+                setRoute({ name: 'ladder' })
               }}
             />
           )}

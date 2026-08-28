@@ -18,6 +18,7 @@ export type WinId =
   | 'my_stuff'
   | 'forum'
   | 'ladder_list'
+  | 'ladder_file'
   | `token:${string}`
   | `ladder:${string}`
 

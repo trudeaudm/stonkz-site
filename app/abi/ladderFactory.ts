@@ -4,7 +4,9 @@
  * `AuctionFiled` is the discovery event: index it the way scanner.ts indexes `ExpressListed`.
  *
  * Filing is gated by DeployControls (`_requireDeployAllowed`), so `file` is reachable only by an
- * allowlisted deployer — do NOT build a public "create auction" form against it. The production overload is
+ * allowlisted deployer: any form built on it MUST read `deploysEnabled` / `allowlistCount` /
+ * `isDeployerAllowed` first and say plainly that a non-allowlisted wallet would revert
+ * `DeployerNotAllowed` (see ladder/LadderFileForm.tsx). The production overload is
  * `file(params, userSalt)`, which additionally requires the predicted auction address to carry the 0x4663
  * vanity prefix (16 bits, so cheap to mine client-side, unlike the hook's 30).
  */

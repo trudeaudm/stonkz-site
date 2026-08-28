@@ -123,9 +123,11 @@ function AuctionCard({
 
 export function LadderListWindow({
   onOpen,
+  onFile,
   onClose,
 }: {
   onOpen: (auction: Address) => void
+  onFile: () => void
   onClose: () => void
 }) {
   const { auctions, progress, error, factoryMissing } = useLadderIndex()
@@ -210,10 +212,19 @@ export function LadderListWindow({
             )}
           </div>
 
+          <button
+            type="button"
+            className="btn95 big go"
+            style={{ marginTop: 10, width: '100%' }}
+            onClick={onFile}
+          >
+            🔨 file a book
+          </button>
           <p className="hint" style={{ textAlign: 'left' }}>
             filing a ladder auction is invite-only for now — the factory only
-            takes an allowlisted deployer. you can bid into any book you see
-            here.
+            takes an allowlisted deployer, and the form says up front whether
+            your wallet is one. you can bid into any book you see here either
+            way.
           </p>
         </>
       )}
