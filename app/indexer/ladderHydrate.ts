@@ -87,6 +87,8 @@ const IMMUTABLE_LABELS = [
   'N',
   'pairScaleToWad',
   'settlement',
+  'pokeTreasury',
+  'bidFee',
 ] as const
 
 const TOKEN_LABELS = ['name', 'symbol', 'decimals'] as const
@@ -137,6 +139,8 @@ const STATE_STRIDE = STATE_LABELS.length
 const OPTIONAL_LABELS: readonly HydrateLabel[] = [
   'liveBudget',
   'currentMmax',
+  'pokeTreasury',
+  'bidFee',
   'raiseSplit',
   'holdbackAmount',
   'decimals',
@@ -286,6 +290,8 @@ function unreadableCard(
     duration: '0',
     rungStepWad: '0',
     minBidPair: '0',
+    bidFee: '0',
+    pokeTreasury: zeroAddress,
     walletCapBps: 0,
     // AuctionFiled carries these two, so they survive an unreadable auction.
     holdbackBps: L.holdbackBps,
@@ -392,6 +398,12 @@ export async function hydrateAuctions(
       duration: pick<bigint>('duration').toString(),
       rungStepWad: pick<bigint>('rungStepWad').toString(),
       minBidPair: pick<bigint>('minBidPair').toString(),
+      bidFee: (
+        results[base + HYDRATE_INDEX.get('bidFee')!]?.result as bigint | undefined ?? 0n
+      ).toString(),
+      pokeTreasury:
+        (results[base + HYDRATE_INDEX.get('pokeTreasury')!]?.result as Address | undefined) ??
+        zeroAddress,
       walletCapBps: pick<number>('walletCapBps'),
       holdbackBps: pick<number>('holdbackBps'),
       carveBps: pick<number>('carveBps'),

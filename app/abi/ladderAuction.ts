@@ -5,10 +5,12 @@
  * Owner-only setters and the onlyOwner `*ForTest` fast-forwards are deliberately excluded.
  *
  * Units, because they are the easy thing to get wrong here:
- *  - `placeBid(size, maxPrice)`: `size` is RAW pair units (wei on a native book, 6dp on USDG) and must be
- *    forwarded as msg.value on a native book. `maxPrice` is pair-wei per token, WAD.
- *  - `minBidPair` is the $5 minimum ALREADY converted into this book's pair currency. Validate a bid
- *    against it; never against a hardcoded 5e18, which on a native book would mean 5 ETH.
+ *  - `placeBid(size, maxPrice)`: `size` is RAW pair units (wei on a native book, 6dp on USDG).
+ *    `msg.value` is `size + bidFee()` on a native book and exactly `bidFee()` on an ERC20 book.
+ *    `maxPrice` is pair-wei per token, WAD.
+ *  - `bidFee()` is the live ETH fee when `pokeTreasury` is set, else 0. Owner-settable
+ *    (gas spikes / sponsored promos). It never enters committed.
+ *  - `minBidPair` is 0 on new books (the $5 floor was replaced by the ETH bid fee).
  *  - `pathPrice` / `pathOffered` / `pathSold` are per-period and map straight onto LadderGrid's
  *    LadderPeriodCell { period, price, offered, sold }.
  *  - `fillOf(wallet)` returns (committed, spent, tokens, refund) — everything a "my bid" panel needs.
@@ -44,6 +46,32 @@ export const ladderAuctionAbi = [
     {
       "type": "function",
       "name": "auctionSupply",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "bidFee",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "bidFeeWei",
       "inputs": [],
       "outputs": [
         {
@@ -601,6 +629,19 @@ export const ladderAuctionAbi = [
     },
     {
       "type": "function",
+      "name": "pokeTreasury",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "price",
       "inputs": [],
       "outputs": [
@@ -1022,6 +1063,44 @@ export const ladderAuctionAbi = [
     },
     {
       "type": "event",
+      "name": "BidFeePaid",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "BidFeeSet",
+      "inputs": [
+        {
+          "name": "fee",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
       "name": "BidPlaced",
       "inputs": [
         {
@@ -1147,6 +1226,19 @@ export const ladderAuctionAbi = [
     },
     {
       "type": "event",
+      "name": "PokeTreasurySet",
+      "inputs": [
+        {
+          "name": "pokeTreasury",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
       "name": "RefundClaimed",
       "inputs": [
         {
@@ -1221,6 +1313,16 @@ export const ladderAuctionAbi = [
     },
     {
       "type": "error",
+      "name": "BidFee",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "BidFeeBounds",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "BookBehind",
       "inputs": [
         {
@@ -1229,6 +1331,11 @@ export const ladderAuctionAbi = [
           "internalType": "uint16"
         }
       ]
+    },
+    {
+      "type": "error",
+      "name": "EmptyBid",
+      "inputs": []
     },
     {
       "type": "error",

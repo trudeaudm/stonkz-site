@@ -12,6 +12,10 @@ const ABIS: Abi[] = [ladderAuctionAbi as Abi, ladderFactoryAbi as Abi]
 
 const HUMAN: Record<string, string> = {
   MinBid: 'that bid is under the minimum for this book',
+  EmptyBid: 'bid size must be greater than zero',
+  BidFee:
+    'the attached ETH does not match this book\'s bid fee — native books send size + fee, erc20 books send exactly the fee',
+  BidFeeBounds: 'that bid fee is over the platform ceiling',
   MaxPriceBelowLive:
     'your price ceiling is below the live price — raise the ceiling',
   AuctionFinished: 'the bell already rang — this book takes no more bids',

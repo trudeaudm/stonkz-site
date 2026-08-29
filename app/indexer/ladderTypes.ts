@@ -107,12 +107,14 @@ export type IndexedAuction = {
   duration: string
   rungStepWad: string
   /**
-   * The $5 minimum ALREADY converted into this book's pair currency, WAD.
-   * Validate a bid against this. NEVER against a hardcoded 5e18, which on a native
-   * book means 5 ETH — that was a real shipped bug. See minBidRaw() for the value to
-   * compare a raw `size` argument against.
+   * Always 0 on books filed after the bid-fee change. Kept because old auctions still
+   * expose the getter. Spam is gated by `bidFee` (0.0005 ETH) when `pokeTreasury` is set.
    */
   minBidPair: string
+  /** 0 on pre-fee auctions (getter missing → hydrate defaults to 0). */
+  bidFee: string
+  /** address(0) when the book charges no bid fee. */
+  pokeTreasury: Address
   walletCapBps: number
   holdbackBps: number
   carveBps: number
@@ -251,11 +253,17 @@ export function pairWadToRaw(wad: bigint, pairScaleToWad: string): bigint {
 
 /**
  * The smallest `size` (RAW pair units) that clears MinBid on this book.
- * Rounds UP: placeBid checks `size * pairScaleToWad >= minBidPair`, so a floored
- * conversion lands one unit short and reverts.
+ * New books stamp minBidPair = 0; old books may still carry a $5 floor.
+ * Rounds UP: placeBid used to check `size * pairScaleToWad >= minBidPair`.
  */
 export function minBidRaw(a: IndexedAuction): bigint {
   const scale = BigInt(a.pairScaleToWad)
   const min = BigInt(a.minBidPair)
+  if (min === 0n) return 0n
   return (min + scale - 1n) / scale
+}
+
+/** ETH attached to placeBid when the poke treasury is wired. 0 on old / unset books. */
+export function bidFeeWei(a: IndexedAuction): bigint {
+  return BigInt(a.bidFee ?? '0')
 }

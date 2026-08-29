@@ -3,22 +3,19 @@
  * write, wait, refresh.
  *
  * UNITS. `size` is RAW pair units: wei on a native book, 6dp on a USDG book.
- * On a native book it must ALSO be forwarded as msg.value — the contract checks
- * `msg.value == size` and reverts MinBid when it disagrees. On an ERC20 book the
- * auction needs an allowance and the call carries no value.
- *
- * The minimum comes from minBidRaw(auction), which is the $5 floor already
- * converted into this book's currency. A hardcoded 5e18 would demand 5 ETH on a
- * native book; that shipped once and is not coming back.
+ * msg.value is `size + bidFee` on a native book and exactly `bidFee` on an ERC20
+ * book. The fee is 0.0005 ETH when pokeTreasury is set, else 0 (pre-fee auctions).
+ * It never enters committed / raised — it goes to the poke-bot treasury.
  */
 import { useCallback, useRef, useState } from 'react'
-import { formatUnits, zeroAddress, type Hex } from 'viem'
+import { formatEther, formatUnits, zeroAddress, type Hex } from 'viem'
 import { useAccount, usePublicClient, useWriteContract } from 'wagmi'
 import { ladderAuctionAbi } from '../abi/ladderAuction'
 import { erc20ApproveAbi } from '../abi/permit2'
 import { env } from '../config/env'
 import { readWalletFill } from '../indexer/ladderHydrate'
 import {
+  bidFeeWei,
   minBidRaw,
   pairDecimals,
   type IndexedAuction,
@@ -117,7 +114,7 @@ export function useLadderBid(
 
         // Fresh price/done: the index poll is 12s behind and both gates are
         // evaluated after placeBid's own _sync().
-        const [livePrice, done, behind] = await Promise.all([
+        const [livePrice, done, behind, liveFee] = await Promise.all([
           client.readContract({
             address: a.auction,
             abi: ladderAuctionAbi,
@@ -133,6 +130,15 @@ export function useLadderBid(
             abi: ladderAuctionAbi,
             functionName: 'periodsBehind',
           }),
+          // Live fee: owner can drop it to 0 for a promo or raise it with gas. Old books
+          // have no getter — fall back to the hydrated snapshot (0).
+          client
+            .readContract({
+              address: a.auction,
+              abi: ladderAuctionAbi,
+              functionName: 'bidFee',
+            })
+            .catch(() => bidFeeWei(a)),
         ])
         if (done) {
           return fail('the bell already rang — this book takes no more bids')
@@ -149,32 +155,45 @@ export function useLadderBid(
           )
         }
 
+        if (sizeRaw === 0n) {
+          return fail('bid size must be greater than zero')
+        }
         const min = minBidRaw(a)
-        if (sizeRaw < min) {
+        if (min > 0n && sizeRaw < min) {
           return fail(
             `minimum bid on this book is ${human(min)} — you asked for ${human(sizeRaw)}`,
           )
         }
+        const fee = liveFee
         if (maxPriceWad < livePrice) {
           return fail(
             `your ceiling ${formatPriceWad(maxPriceWad)} is under the live price ${formatPriceWad(livePrice)} — raise it or the bid reverts`,
           )
         }
 
-        const balance = native
-          ? await client.getBalance({ address })
+        const ethBal = await client.getBalance({ address })
+        const pairBal = native
+          ? ethBal
           : await client.readContract({
               address: a.pairToken,
               abi: erc20ApproveAbi,
               functionName: 'balanceOf',
               args: [address],
             })
-        if (sizeRaw > balance) {
+        if (sizeRaw > pairBal) {
           return fail(
-            `you have ${human(balance)} and this bid needs ${human(sizeRaw)}`,
+            `you have ${human(pairBal)} and this bid needs ${human(sizeRaw)}`,
           )
         }
-        if (native && sizeRaw === balance) {
+        const value = (native ? sizeRaw : 0n) + fee
+        if (fee > 0n && ethBal < value) {
+          return fail(
+            `this bid needs ${formatEther(value)} ETH (${
+              native ? `${human(sizeRaw)} + ` : ''
+            }${formatEther(fee)} bid fee) and you have ${formatEther(ethBal)}`,
+          )
+        }
+        if (native && sizeRaw === pairBal) {
           return fail('that is every wei you have — leave something for gas')
         }
 
@@ -221,9 +240,6 @@ export function useLadderBid(
           }
         }
 
-        // Native book: msg.value MUST equal size. ERC20 book: no value at all.
-        const value = native ? sizeRaw : 0n
-
         setStep('simulate')
         setStatus('3/5 simulateContract placeBid')
         await client.simulateContract({
@@ -267,9 +283,14 @@ export function useLadderBid(
   return { run, step, status, error, txHash, reset, busy: BUSY.has(step) }
 }
 
-/** Native books must be able to hold `size` in msg.value — surfaced for copy. */
+/** How msg.value is built — surfaced for copy. */
 export function bidValueNote(a: IndexedAuction): string {
+  const fee = bidFeeWei(a)
+  const feeBit =
+    fee > 0n ? ` plus a ${formatEther(fee)} ETH bid fee to the poke treasury` : ''
   return a.pairToken === zeroAddress
-    ? 'native book — your bid is sent as msg.value on the same call'
-    : 'erc20 book — one approve, then the bid carries no value'
+    ? `native book — your budget is sent as msg.value${feeBit}`
+    : fee > 0n
+      ? `erc20 book — approve the budget, then the call sends ${formatEther(fee)} ETH as the bid fee`
+      : 'erc20 book — one approve, then the bid carries no value'
 }

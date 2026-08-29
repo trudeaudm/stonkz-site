@@ -39,6 +39,7 @@ import {
   LADDER_STATUS_STAMP,
   LADDER_STATUS_TONE,
   NO_LIMIT_MAX_PRICE,
+  formatBidFee,
   formatBps,
   formatClock,
   formatMinBid,
@@ -613,17 +614,19 @@ export function LadderDetailWindow({
                 <input
                   value={sizeStr}
                   onChange={(e) => setSizeStr(e.target.value)}
-                  placeholder={formatUnits(minRaw, decimals)}
+                  placeholder={minRaw > 0n ? formatUnits(minRaw, decimals) : '0.01'}
                   inputMode="decimal"
                   style={{ flex: 1 }}
                 />
-                <button
-                  type="button"
-                  className="btn95"
-                  onClick={() => setSizeStr(formatUnits(minRaw, decimals))}
-                >
-                  MIN
-                </button>
+                {minRaw > 0n && (
+                  <button
+                    type="button"
+                    className="btn95"
+                    onClick={() => setSizeStr(formatUnits(minRaw, decimals))}
+                  >
+                    MIN
+                  </button>
+                )}
               </div>
             </label>
 
@@ -650,11 +653,17 @@ export function LadderDetailWindow({
               becomes a loss.
             </p>
 
+            {minRaw > 0n && (
+              <div className="dr">
+                <span>minimum bid</span>
+                <b className="mono">
+                  {formatMinBid(a)} {unit}
+                </b>
+              </div>
+            )}
             <div className="dr">
-              <span>minimum bid</span>
-              <b className="mono">
-                {formatMinBid(a)} {unit}
-              </b>
+              <span>bid fee</span>
+              <b className="mono">{formatBidFee(a)}</b>
             </div>
             <div className="dr">
               <span>how it is sent</span>

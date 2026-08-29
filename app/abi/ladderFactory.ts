@@ -335,6 +335,19 @@ export const ladderFactoryAbi = [
     },
     {
       "type": "function",
+      "name": "bidFeeWei",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "carveTreasury",
       "inputs": [],
       "outputs": [
@@ -771,6 +784,19 @@ export const ladderFactoryAbi = [
     },
     {
       "type": "function",
+      "name": "pokeTreasury",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "poolManagerRef",
       "inputs": [],
       "outputs": [
@@ -1073,6 +1099,19 @@ export const ladderFactoryAbi = [
     },
     {
       "type": "event",
+      "name": "BidFeeSet",
+      "inputs": [
+        {
+          "name": "fee",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
       "name": "CarveTreasuryChanged",
       "inputs": [
         {
@@ -1213,6 +1252,19 @@ export const ladderFactoryAbi = [
         },
         {
           "name": "next",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "PokeTreasurySet",
+      "inputs": [
+        {
+          "name": "pokeTreasury",
           "type": "address",
           "indexed": true,
           "internalType": "address"
@@ -1405,6 +1457,11 @@ export const ladderFactoryAbi = [
     {
       "type": "error",
       "name": "AuctionCreateFailed",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "BidFeeBounds",
       "inputs": []
     },
     {

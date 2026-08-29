@@ -13,6 +13,7 @@
  */
 import { formatEther, formatUnits, zeroAddress } from 'viem'
 import {
+  bidFeeWei,
   minBidRaw,
   pairDecimals,
   pairRawToWad,
@@ -119,6 +120,12 @@ export function formatTokens(raw: bigint | string): string {
 /** The min bid in this book's own currency, never a 5e18 assumption. */
 export function formatMinBid(a: IndexedAuction): string {
   return formatUnits(minBidRaw(a), pairDecimals(a.pairScaleToWad))
+}
+
+/** ETH bid fee that funds the poke bot. Empty string when the book charges none. */
+export function formatBidFee(a: IndexedAuction): string {
+  const fee = bidFeeWei(a)
+  return fee === 0n ? 'none' : `${formatEther(fee)} ETH`
 }
 
 export function formatBps(bps: number): string {
